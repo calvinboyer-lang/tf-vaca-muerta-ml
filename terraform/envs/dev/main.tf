@@ -59,5 +59,5 @@ module "storage" {
 
   bucket_name   = "${var.project_id}-tfvm-artifacts"
   region        = var.region
-  workload_pool = "${var.project_id}.svc.id.goog"
+  workload_pool = var.enable_gke ? module.gke[0].workload_pool : "${var.project_id}.svc.id.goog"
 }

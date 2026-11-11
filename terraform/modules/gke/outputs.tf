@@ -8,5 +8,7 @@ output "endpoint" {
 }
 
 output "workload_pool" {
-  value = "${var.project_id}.svc.id.goog"
+  # Se lee del cluster creado (no se arma como texto) para que los bindings de
+  # Workload Identity esperen a que exista el pool PROJECT.svc.id.goog.
+  value = google_container_cluster.this.workload_identity_config[0].workload_pool
 }
