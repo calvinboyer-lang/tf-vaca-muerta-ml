@@ -1,0 +1,37 @@
+{
+  "dataset_id": "vm_shale_202601_202606",
+  "file": "vm_shale_202601_202606.csv.gz",
+  "sha256": "04a1ebb30c7ffa18ffe89cbf054decb85f32edea29b3e2c0c684c0016ab3b2d5",
+  "created_utc": "2026-11-11T21:15:42+00:00",
+  "sources": [
+    "arcgis_capa9_20261111.csv.gz",
+    "arcgis_trayectorias_20261111.csv.gz"
+  ],
+  "padron": "arcgis_pozos_20261111.csv.gz (FECHA_INIC)",
+  "source_filter": "formacion='vaca muerta' AND tipo_de_recurso='NO CONVENCIONAL' AND sub_tipo_recurso='SHALE'",
+  "months": {
+    "first": "2026-01",
+    "last": "2026-06",
+    "count": 6
+  },
+  "rows_shale": 18857,
+  "wells_shale": 3278,
+  "population": {
+    "tipopozo": "Petrolífero",
+    "tipoestado": "Extracción Efectiva"
+  },
+  "rows_population": 12321,
+  "wells_population": 2212,
+  "edad": {
+    "fuente_padron_pct": 100.0,
+    "censurada_pct": 0.0,
+    "sin_dato_pct": 0.0,
+    "padron_vs_historia": {
+      "pozos": 201,
+      "mediana_meses": 7.0,
+      "p10_meses": 5.0,
+      "p90_meses": 117.0
+    }
+  },
+  "largo_horizontal_cobertura_pct": 52.33
+}
