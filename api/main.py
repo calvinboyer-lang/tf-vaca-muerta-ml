@@ -127,7 +127,7 @@ def index() -> dict:
         "service": "tf-vaca-muerta-api",
         "pod": POD,
         "endpoints": ["POST /predict", "GET /healthz", "GET /livez", "GET /metrics", "GET /models",
-                      "GET /models/{model}/versions", "GET /wells/{idpozo}", "GET /wells?q=", "GET /stats",
+                      "GET /models/{model}/versions", "GET /wells/{idpozo}", "GET /wells?q=", "GET /wells/sample", "GET /stats",
                       "POST /admin/reload", "GET /docs"],
         "example": {"idpozo": 165715},
     }
@@ -228,6 +228,14 @@ def wells_search(q: str = Query(..., min_length=2), limit: int = Query(20, le=10
     if state.wells is None:
         raise HTTPException(503, "índice de pozos no disponible")
     return {"dataset": state.wells.dataset_id, "resultados": state.wells.search(q, limit)}
+
+
+@app.get("/wells/sample")
+def wells_sample(n: int = Query(200, ge=1, le=5000)) -> dict:
+    """Ids de pozos del dataset (para pruebas de carga y ejemplos)."""
+    if state.wells is None:
+        raise HTTPException(503, "índice de pozos no disponible")
+    return {"dataset": state.wells.dataset_id, "idpozo": state.wells.sample_ids(n)}
 
 
 @app.get("/wells/{idpozo}")

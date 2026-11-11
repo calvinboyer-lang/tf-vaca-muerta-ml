@@ -1,0 +1,28 @@
+# PostgreSQL como StatefulSet con volumen persistente (y no Cloud SQL):
+# es un registro auxiliar de bajo volumen; un StatefulSet cuesta solo el disco
+# (Cloud SQL suma una instancia que se cobra por hora) y se despliega igual en
+# k3d y en GKE. Si la base cae, la API sigue prediciendo (registro asíncrono).
+image:
+  repository: postgres
+  tag: "16-alpine"
+  pullPolicy: IfNotPresent
+
+database: vm
+user: vm
+# Secret creado fuera del repo:
+#   kubectl create secret generic postgres-auth --from-literal=password=<clave>
+secretName: postgres-auth
+secretKey: password
+
+storage:
+  size: 2Gi
+  # Vacío = StorageClass por defecto (local-path en k3d, standard-rwo en GKE).
+  storageClassName: ""
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

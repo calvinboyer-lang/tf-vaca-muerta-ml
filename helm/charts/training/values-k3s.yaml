@@ -1,0 +1,14 @@
+image:
+  repository: training
+  tag: local
+  pullPolicy: Never
+store:
+  uri: /artifacts
+  hostPath: /artifacts
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 1536Mi

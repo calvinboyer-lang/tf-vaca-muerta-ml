@@ -1,0 +1,7 @@
+# Copiar a dev.tfvars (ignorado por git) y completar:
+project_id = "mi-proyecto-123"
+region     = "us-central1"
+zone       = "us-central1-a"
+# enable_gke   = true
+# machine_type = "e2-standard-2"
+# max_node_count = 4

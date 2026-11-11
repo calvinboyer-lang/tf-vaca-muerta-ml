@@ -1,0 +1,44 @@
+# Un CronJob por modelo. Suspendidos por defecto: se lanzan a mano con
+#   kubectl create job train-v2-$(Get-Date -f yyyyMMddHHmm) --from=cronjob/training-v2
+# Con suspend=false se reentrenan solos con `schedule` (p. ej. al publicarse
+# un nuevo mes de datos); la regla de promoción decide si la versión nueva
+# reemplaza a la vigente.
+image:
+  repository: training
+  tag: local
+  pullPolicy: IfNotPresent
+
+models: ["v1", "v2", "v2_notef"]
+suspend: true
+schedule: "0 6 5 * *"   # día 5 de cada mes, 06:00 UTC
+
+# Snapshot dentro del store (lo sube tasks.ps1 upload-dataset o un entrenamiento local).
+dataset: datasets/REEMPLAZAR.csv.gz
+store:
+  uri: /artifacts          # gs://<bucket>/vm en GKE
+  hostPath: ""             # /artifacts en k3d
+tune: false
+extraArgs: []
+
+database:
+  enabled: true
+  host: postgres
+  port: 5432
+  name: vm
+  user: vm
+  secretName: postgres-auth
+  secretKey: password
+
+serviceAccount:
+  create: true
+  name: vm-trainer
+  # Workload Identity: cuenta de GCP con permiso de ESCRITURA sobre el bucket.
+  gcpServiceAccount: ""
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 768Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi

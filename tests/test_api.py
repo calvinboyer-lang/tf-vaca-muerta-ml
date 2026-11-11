@@ -78,6 +78,11 @@ def test_unknown_category_is_reported(state):
     assert out["categorias_no_vistas"] == ["empresa"]
 
 
+def test_sample_ids(state):
+    ids = state.wells.sample_ids(10)
+    assert len(ids) == 10 and all(state.wells.get(i) for i in ids)
+
+
 def test_well_history_has_estimates(state, trained_store):
     hist = state.well_history(a_well(trained_store[1]))
     assert hist["meses"]
@@ -98,6 +103,8 @@ def test_reload_picks_new_version_and_keeps_old_on_error(state, trained_store):
     state.reload()
     assert state.handles["v2"].version == good
     assert "v2" in state.errors
+    # se restaura el puntero: el store del módulo lo usan los tests siguientes
+    registry.promote(store, "v2", pointer["version"], pointer["sha256"], pointer["holdout_mae"], "restaurado")
 
 
 def test_not_ready_without_models(tmp_path):
@@ -142,6 +149,7 @@ def test_http_endpoints(client, trained_store):
     assert set(client.get("/models").json()["models"]) == {"v1", "v2", "v2_notef"}
     assert client.get("/models/v2/versions").json()["versions"]
     assert client.get(f"/wells/{idpozo}").status_code == 200
+    assert len(client.get("/wells/sample", params={"n": 5}).json()["idpozo"]) == 5
     assert client.get("/wells", params={"q": "YPF"}).json()["resultados"]
     assert client.post("/admin/reload").status_code == 200
     assert client.get("/stats").status_code == 503  # sin DATABASE_URL

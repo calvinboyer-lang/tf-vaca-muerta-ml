@@ -1,0 +1,55 @@
+# kube-prometheus-stack del TF (basado en el del laboratorio, chart 91.9.0).
+# Lo instala deploy.yml (observability=true) en el namespace observability.
+# Cambios respecto del lab:
+#   - Grafana toma usuario y clave de un Secret creado en el cluster
+#     (grafana-admin): la clave nunca pasa por el repo ni por los logs.
+#   - Prometheus levanta cualquier PrometheusRule (alerts.yaml) sin label `release`.
+#   - Más memoria para Grafana y Prometheus (nodos e2-standard-2).
+
+prometheus:
+  prometheusSpec:
+    retention: 3d
+    resources:
+      requests:
+        cpu: 100m
+        memory: 384Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+
+grafana:
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+    datasources:
+      alertmanager:
+        enabled: false
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      access: proxy
+      url: http://loki-gateway.observability.svc.cluster.local
+
+# Las alertas las evalúa Prometheus (observability/alerts.yaml) y Grafana las
+# muestra en Alerting > Alert rules (reglas administradas por la fuente de datos).
+# Alertmanager queda apagado: no hay a quién notificar en un entorno académico.
+alertmanager:
+  enabled: false

@@ -1,0 +1,55 @@
+# Alertas del TF. Las evalúa Prometheus; se ven en Grafana (Alerting) y en
+# Prometheus (/alerts). Umbrales justificados en docs/resultados.md.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: tfvm-api
+  namespace: default
+spec:
+  groups:
+    - name: tfvm-api
+      rules:
+        # Principal: latencia p95 de /predict sostenida por encima de 300 ms.
+        # Con un proceso por pod la latencia sube por espera en cola cuando la
+        # CPU se satura: si el HPA no alcanza (tope de réplicas o de nodos), salta.
+        - alert: PredictLatenciaP95Alta
+          expr: |
+            histogram_quantile(0.95, sum by (le) (rate(predict_latency_seconds_bucket[2m]))) > 0.3
+          for: 3m
+          labels:
+            severity: warning
+          annotations:
+            summary: "p95 de /predict = {{ $value | humanizeDuration }} (> 300 ms durante 3 min)"
+            description: "Revisar HPA (kubectl get hpa api) y nodos (kubectl top nodes)."
+
+        - alert: PredictErrores5xx
+          expr: |
+            sum(rate(predict_requests_total{status=~"5.."}[5m]))
+              / clamp_min(sum(rate(predict_requests_total[5m])), 1e-9) > 0.01
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Más del 1 % de /predict responde 5xx ({{ $value | humanizePercentage }})"
+
+        - alert: PrediccionesFueraDeRango
+          expr: sum(increase(predict_out_of_range_total[15m])) > 5
+          labels:
+            severity: info
+          annotations:
+            summary: "{{ $value }} predicciones fuera del rango físico/entrenado en 15 min"
+
+        - alert: ReplicasConVersionesDistintas
+          expr: count(count by (model, version) (model_info)) > count(count by (model) (model_info))
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Réplicas sirviendo versiones distintas de un modelo por más de 10 min (falló la recarga en alguna)"
+
+        - alert: ErrorCargaModelo
+          expr: sum(increase(model_reload_total{result="error"}[10m])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "Falló la carga de un modelo (sha256, bucket o permisos): revisar logs de la API en Loki"

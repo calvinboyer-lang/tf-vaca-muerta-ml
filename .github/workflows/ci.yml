@@ -36,8 +36,54 @@ jobs:
           uv run --python 3.12 --with-requirements training/requirements.txt
           --with-requirements api/requirements.txt --with pytest --with httpx pytest -q
 
+  infra:
+    # Valida lo que no se puede probar sin la nube: Terraform, charts y scripts.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: terraform fmt + validate (sin backend ni credenciales)
+        run: |
+          terraform fmt -check -recursive -diff terraform
+          cd terraform/envs/dev
+          terraform init -backend=false -input=false
+          terraform validate
+
+      - uses: azure/setup-helm@v4
+
+      - name: helm lint + template (GKE y k3d)
+        run: |
+          for c in api postgres training; do
+            helm lint "helm/charts/$c"
+            helm template "$c" "helm/charts/$c" > /dev/null
+            if [ -f "helm/charts/$c/values-k3s.yaml" ]; then
+              helm lint "helm/charts/$c" -f "helm/charts/$c/values-k3s.yaml"
+              helm template "$c" "helm/charts/$c" -f "helm/charts/$c/values-k3s.yaml" > /dev/null
+            fi
+          done
+          helm template api helm/charts/api --set serviceAccount.gcpServiceAccount=vm-api@p.iam.gserviceaccount.com \
+            --set store.uri=gs://b/vm | grep -A2 "kind: ServiceAccount"
+
+      - name: Sintaxis de los scripts de PowerShell
+        shell: pwsh
+        run: |
+          foreach ($f in @("tasks.ps1", "scripts/bootstrap-gcp.ps1")) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $f), [ref]$null, [ref]$errors) | Out-Null
+            if ($errors) { $errors | ForEach-Object { Write-Error "$f : $_" }; exit 1 }
+            "$f OK"
+          }
+
+      - name: JSON y YAML de observabilidad
+        run: |
+          python3 -c "import json; json.load(open('observability/dashboards/tfvm-api.json'))"
+          python3 -c "import yaml,sys; [list(yaml.safe_load_all(open(f))) for f in sys.argv[1:]]" \
+            observability/*.yaml loadtest/k6-job.yaml
+
   build:
-    needs: test
+    needs: [test, infra]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

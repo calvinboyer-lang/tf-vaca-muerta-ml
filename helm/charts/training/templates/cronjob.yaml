@@ -1,0 +1,73 @@
+{{- range $model := .Values.models }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: training-{{ $model | replace "_" "-" }}
+  labels:
+    app: training
+    model: {{ $model | replace "_" "-" }}
+spec:
+  schedule: {{ $.Values.schedule | quote }}
+  suspend: {{ $.Values.suspend }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 5
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app: training
+            model: {{ $model | replace "_" "-" }}
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ $.Values.serviceAccount.name }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            fsGroup: 10001
+          containers:
+            - name: training
+              image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+              imagePullPolicy: {{ $.Values.image.pullPolicy }}
+              args:
+                - --model
+                - {{ $model | quote }}
+                - --dataset
+                - {{ $.Values.dataset | quote }}
+                - --store
+                - {{ $.Values.store.uri | quote }}
+                {{- if $.Values.tune }}
+                - --tune
+                {{- end }}
+                {{- range $.Values.extraArgs }}
+                - {{ . | quote }}
+                {{- end }}
+              {{- if $.Values.database.enabled }}
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ $.Values.database.secretName }}
+                      key: {{ $.Values.database.secretKey }}
+                - name: DATABASE_URL
+                  value: "postgresql://{{ $.Values.database.user }}:$(PGPASSWORD)@{{ $.Values.database.host }}:{{ $.Values.database.port }}/{{ $.Values.database.name }}"
+              {{- end }}
+              resources:
+                {{- toYaml $.Values.resources | nindent 16 }}
+              {{- if $.Values.store.hostPath }}
+              volumeMounts:
+                - name: artifacts
+                  mountPath: {{ $.Values.store.uri }}
+              {{- end }}
+          {{- if $.Values.store.hostPath }}
+          volumes:
+            - name: artifacts
+              hostPath:
+                path: {{ $.Values.store.hostPath }}
+                type: Directory
+          {{- end }}
+{{- end }}

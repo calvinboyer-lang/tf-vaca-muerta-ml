@@ -54,6 +54,8 @@ class WellIndex:
         self.dataset_id = dataset_id
         df = df.sort_values(["idpozo", "mes_idx"])
         self._wells: dict[int, Well] = {}
+        mask = df["tipopozo"].astype(str).str.startswith("Petrol") & df["tipoestado"].astype(str).str.startswith("Extracci")
+        self._eligible = set(int(i) for i in df.loc[mask, "idpozo"].unique()) or set(int(i) for i in df["idpozo"].unique())
         cols = ["mes_idx", "anio", "mes", "prod_pet", "prod_gas", "tef", "tipoextraccion", "tipoestado", "tipopozo"]
         for idpozo, g in df.groupby("idpozo", sort=False):
             last = g.iloc[-1]
@@ -76,6 +78,12 @@ class WellIndex:
 
     def get(self, idpozo: int) -> Well | None:
         return self._wells.get(int(idpozo))
+
+    def sample_ids(self, n: int, seed: int = 0) -> list[int]:
+        """Pozos que alguna vez estuvieron en la población (petrolíferos en extracción efectiva)."""
+        ids = sorted(self._eligible)
+        rng = np.random.default_rng(seed)
+        return [int(i) for i in rng.choice(ids, size=min(n, len(ids)), replace=False)]
 
     def search(self, text: str, limit: int = 20) -> list[dict]:
         text = text.strip().lower()

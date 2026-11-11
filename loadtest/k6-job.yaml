@@ -1,0 +1,50 @@
+# k6 como Job de Kubernetes: la carga sale de ADENTRO del cluster y llega al
+# Service, que la reparte entre todas las réplicas (un port-forward la
+# mandaría a un solo pod). tasks.ps1 loadtest reemplaza los __VALORES__.
+#   kubectl create configmap k6-script --from-file=loadtest/k6-predict.js
+#   kubectl apply -f <este archivo con los valores>
+#   kubectl logs -f job/k6-__LABEL__
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-__LABEL__
+  labels:
+    app: k6
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: k6
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: k6
+          image: grafana/k6:2.3.0  # misma versión que el template de la cátedra
+          args: ["run", "--quiet", "/scripts/k6-predict.js"]
+          env:
+            - name: API_URL
+              value: "http://api:8081"
+            - name: VUS
+              value: "__VUS__"
+            - name: DURATION
+              value: "__DURATION__"
+            - name: LABEL
+              value: "__LABEL__"
+            - name: MODEL
+              value: "__MODEL__"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+      volumes:
+        - name: script
+          configMap:
+            name: k6-script

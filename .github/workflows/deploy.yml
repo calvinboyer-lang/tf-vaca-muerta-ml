@@ -1,0 +1,184 @@
+# Despliegue en GKE (manual): Terraform y luego los charts de Helm.
+#   Actions > deploy > Run workflow
+#     image_tag   sha (o vX.Y.Z) que ya publicó ci.yml -- nunca latest
+#     dataset     clave del snapshot en el bucket, ej. datasets/vm_shale_202601_202606.csv.gz
+#     terraform   true = plan + apply (red, GKE, Artifact Registry, bucket, cuentas)
+#     charts      charts a instalar
+#     observability  true = kube-prometheus-stack + Loki + Alloy + alertas + dashboard
+#
+# Requisitos: scripts/bootstrap-gcp.ps1 corrido una vez y las variables
+# GCP_PROJECT_ID, GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_DEPLOY_SERVICE_ACCOUNT
+# (opcionales GCP_REGION, GCP_ZONE, AR_REPOSITORY) cargadas en el repo.
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Tag de imagen publicado por ci.yml (sha completo o vX.Y.Z)"
+        required: true
+        type: string
+      dataset:
+        description: "Snapshot en el bucket (datasets/<id>.csv.gz), para los CronJobs de entrenamiento"
+        required: true
+        type: string
+      terraform:
+        description: "Aplicar Terraform antes de Helm"
+        type: boolean
+        default: true
+      charts:
+        description: "Charts a instalar (separados por espacio)"
+        type: string
+        default: "postgres training api"
+      observability:
+        description: "Instalar/actualizar Prometheus, Grafana, Loki, Alloy, alertas y dashboard"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+  ZONE: ${{ vars.GCP_ZONE || 'us-central1-a' }}
+  AR_REPO: ${{ vars.AR_REPOSITORY || 'tf-vaca-muerta' }}
+  IMAGE_TAG: ${{ inputs.image_tag }}
+  CLUSTER: tfvm-dev-gke
+
+jobs:
+  terraform:
+    if: inputs.terraform
+    runs-on: ubuntu-latest
+    environment: dev
+    defaults:
+      run:
+        working-directory: terraform/envs/dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar entradas
+        run: |
+          [ -n "$PROJECT_ID" ] || { echo "::error::falta la variable GCP_PROJECT_ID"; exit 1; }
+          case "$IMAGE_TAG" in latest|"") echo "::error::image_tag debe ser un sha o vX.Y.Z"; exit 1 ;; esac
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT || vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - run: terraform init -input=false -backend-config="bucket=${PROJECT_ID}-tfstate"
+
+      - name: terraform plan
+        run: |
+          terraform plan -input=false -out=tfplan \
+            -var="project_id=$PROJECT_ID" -var="region=$REGION" -var="zone=$ZONE" -var="ar_repository=$AR_REPO"
+
+      - run: terraform apply -input=false tfplan
+
+  helm:
+    needs: terraform
+    # corre aunque terraform se haya salteado (inputs.terraform=false), pero no si falló
+    if: always() && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT || vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.CLUSTER }}
+          location: ${{ env.ZONE }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - uses: azure/setup-helm@v4
+
+      - name: Secret de PostgreSQL (se genera una sola vez, nunca se guarda en el repo)
+        run: |
+          kubectl get secret postgres-auth >/dev/null 2>&1 || \
+            kubectl create secret generic postgres-auth --from-literal=password="$(openssl rand -hex 18)"
+
+      - name: helm upgrade --install
+        env:
+          CHARTS: ${{ inputs.charts }}
+          DATASET: ${{ inputs.dataset }}
+        run: |
+          AR="$REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPO"
+          STORE="gs://$PROJECT_ID-tfvm-artifacts/vm"
+          for chart in $CHARTS; do
+            case "$chart" in
+              postgres)
+                helm upgrade --install postgres helm/charts/postgres --wait --timeout 5m ;;
+              training)
+                helm upgrade --install training helm/charts/training \
+                  --set image.repository="$AR/training" --set image.tag="$IMAGE_TAG" \
+                  --set store.uri="$STORE" --set dataset="$DATASET" \
+                  --set serviceAccount.gcpServiceAccount="vm-trainer@$PROJECT_ID.iam.gserviceaccount.com" ;;
+              api)
+                helm upgrade --install api helm/charts/api \
+                  --set image.repository="$AR/api" --set image.tag="$IMAGE_TAG" \
+                  --set store.uri="$STORE" \
+                  --set serviceAccount.gcpServiceAccount="vm-api@$PROJECT_ID.iam.gserviceaccount.com" \
+                  --wait --timeout 6m ;;
+              *) echo "chart desconocido: $chart"; exit 1 ;;
+            esac
+          done
+          kubectl get pods,svc,hpa,cronjob,pvc -o wide
+
+  observability:
+    needs: helm
+    if: always() && inputs.observability && needs.helm.result == 'success'
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT || vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.CLUSTER }}
+          location: ${{ env.ZONE }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - uses: azure/setup-helm@v4
+
+      - name: Stack de observabilidad
+        run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo add grafana https://grafana.github.io/helm-charts
+          helm repo update
+          kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -
+          # La clave de Grafana se genera en el cluster la primera vez y no se imprime:
+          #   kubectl -n observability get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d
+          kubectl -n observability get secret grafana-admin >/dev/null 2>&1 || \
+            kubectl -n observability create secret generic grafana-admin \
+              --from-literal=admin-user=admin --from-literal=admin-password="$(openssl rand -hex 12)"
+          helm upgrade --install kube-prom prometheus-community/kube-prometheus-stack --version 91.9.0 \
+            -n observability -f observability/kube-prometheus-stack-values.yaml --wait --timeout 10m
+          helm upgrade --install loki grafana/loki --version 7.3.0 -n observability \
+            -f observability/loki-values.yaml --wait --timeout 10m
+          helm upgrade --install alloy grafana/alloy --version 1.13.0 -n observability \
+            --set controller.type=deployment \
+            --set-file alloy.configMap.content=observability/alloy-logs.alloy --wait
+          kubectl apply -f observability/servicemonitor-api.yaml
+          kubectl apply -f observability/alerts.yaml
+          kubectl -n observability create configmap dashboard-tfvm \
+            --from-file=observability/dashboards/tfvm-api.json --dry-run=client -o yaml \
+            | kubectl label --local -f - grafana_dashboard=1 -o yaml | kubectl apply -f -
+          kubectl -n observability get pods
