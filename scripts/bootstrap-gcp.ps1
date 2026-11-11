@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Preparación de GCP para el TF (se corre UNA vez, en PowerShell, con gcloud logueado).
 

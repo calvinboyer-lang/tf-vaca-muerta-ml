@@ -1,0 +1,4 @@
+# Scripts de PowerShell con CRLF y BOM: Windows PowerShell 5.1 lee los .ps1
+# sin BOM como ANSI y muestra mal los acentos ("fallÃ³").
+*.ps1 text eol=crlf
+*.sh  text eol=lf

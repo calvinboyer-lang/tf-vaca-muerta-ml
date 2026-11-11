@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Atajos del Trabajo Final para PowerShell (reemplaza al Makefile del template).
 
@@ -116,7 +116,34 @@ Pruebas (k3d o GKE, según el contexto de kubectl)
 "@ | Write-Host
     }
     "setup" {
-        if (-not (Test-Path $Py)) { python -m venv .venv }
+        # Python 3.12: es la versión de las imágenes Docker. El modelo se guarda con
+        # joblib y debe cargarse con la MISMA versión de scikit-learn (1.5.2), que no
+        # tiene instaladores para Python 3.13+ en Windows (pip intenta compilar y falla).
+        if (Test-Path $Py) {
+            $v = & $Py -c "import sys; print('%d.%d' % sys.version_info[:2])"
+            if ($v -ne "3.12") {
+                throw ".venv usa Python $v. Borralo (Remove-Item -Recurse -Force .venv) y volvé a correr setup."
+            }
+        }
+        else {
+            $created = $false
+            if (Get-Command py -ErrorAction SilentlyContinue) {
+                & py -3.12 -m venv .venv 2>$null
+                $created = ($LASTEXITCODE -eq 0) -and (Test-Path $Py)
+            }
+            if (-not $created) {
+                $v = & python -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null
+                if ($v -eq "3.12") { & python -m venv .venv; $created = Test-Path $Py }
+            }
+            if (-not $created) {
+                throw @"
+No encontré Python 3.12. Instalalo (no reemplaza tu Python actual) con:
+    winget install -e --id Python.Python.3.12
+cerrá y abrí la terminal, y volvé a correr: .\tasks.ps1 setup
+"@
+            }
+        }
+        Run @("-c", "import sys; print('Python', sys.version)")
         Run @("-m", "pip", "install", "--upgrade", "pip")
         Run @("-m", "pip", "install", "-r", "requirements-dev.txt")
         Run @("-m", "ipykernel", "install", "--user", "--name", "tf-vaca-muerta", "--display-name", "TF Vaca Muerta (.venv)")
