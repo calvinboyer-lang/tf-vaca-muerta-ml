@@ -7,25 +7,25 @@ Base: el repo del Laboratorio 8 (instancia de `infra-cloud-template`), con el ej
 
 ## Estado
 
-| Fase | Contenido | Estado |
-|---|---|---|
-| 1 | Datos versionados, edad del pozo, 3 versiones del modelo, validación, servicio de entrenamiento, notebook | ✅ código listo · ⏳ correr con datos reales |
-| 2 | API FastAPI (`/predict`, `/healthz`, `/metrics`, consultas), PostgreSQL, k3d local, k6 local | ⏳ |
-| 3 | GitHub Actions + OIDC, Terraform (GKE e2-standard-2, bucket, IAM), despliegue | ⏳ |
-| 4 | Prometheus, Grafana, Loki/Alloy, alerta, pruebas de carga (1/3/5 réplicas, HPA 2–10) | ⏳ |
-| 5 | Documentación e informe | ⏳ |
+| Fase | Contenido | Código | Ejecución real |
+|---|---|---|---|
+| 1 | Datos versionados (producción + padrón + trayectorias), edad del pozo, 3 versiones, validación, servicio de entrenamiento, notebook | ✅ | ⏳ correr con datos reales |
+| 2 | API FastAPI, PostgreSQL, charts de Helm, k3d | ✅ | ⏳ |
+| 3 | Terraform (GKE e2-standard-2 + Workload Identity, bucket, cuentas), CI/CD con OIDC | ✅ (validado en CI) | ⏳ bootstrap + deploy |
+| 4 | Prometheus, Grafana, Loki/Alloy, 5 alertas, dashboard, k6 en el cluster | ✅ | ⏳ |
+| 5 | Documentación: arquitectura, endpoints, despliegue, resultados, reflexión | ✅ base | ⏳ completar con mediciones |
 
-## Estructura
+La CI (`ci.yml`) corre en cada push: tests, validación de Terraform/charts/PowerShell, build de las dos imágenes y un smoke test que entrena dentro del contenedor, levanta la API y predice.
 
-```
-vm_ml/            código compartido: datos, variables, evaluación, registro de modelos, almacenamiento
-training/         servicio de entrenamiento (CLI + Dockerfile) -> model.joblib + metadata.json
-scripts/          data_vm.py (descarga y snapshot), versions.py (historial de versiones)
-data/snapshots/   snapshot versionado del dataset (csv.gz + manifest con sha256)
-notebooks/        00_colab_original.ipynb (entrega previa) y 01_tf_vaca_muerta.ipynb (VS Code)
-tests/            pytest con datos sintéticos
-tasks.ps1         atajos para PowerShell (equivalente al Makefile del template)
-```
+## Documentación
+
+| Documento | Contenido |
+|---|---|
+| [docs/arquitectura.md](docs/arquitectura.md) | Diagrama y justificación de las decisiones de diseño |
+| [docs/endpoints.md](docs/endpoints.md) | Especificación de la API con ejemplos |
+| [docs/despliegue.md](docs/despliegue.md) | Instrucciones reproducibles: local, k3d, GCP y GKE |
+| [docs/resultados.md](docs/resultados.md) | Pruebas de entrenamiento e inferencia (plantilla a completar) |
+| [docs/reflexion.md](docs/reflexion.md) | Alcances, limitaciones, ética y qué falta para producción |
 
 ## Primeros pasos (Windows, PowerShell, VS Code)
 

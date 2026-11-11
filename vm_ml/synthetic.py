@@ -24,7 +24,8 @@ def make_snapshot_frame(n_wells: int = 300, first: tuple[int, int] = (2024, 1), 
         empresa = EMPRESAS[i % len(EMPRESAS)]
         area = AREAS[rng.integers(len(AREAS))]
         profundidad = float(rng.normal(4500, 900))
-        qi = rng.lognormal(np.log(3500), 0.5) * (1 + (profundidad - 4500) / 9000)
+        hz = float(rng.uniform(1000, 3500)) if rng.random() > 0.1 else np.nan
+        qi = rng.lognormal(np.log(3500), 0.5) * (1 + (profundidad - 4500) / 9000) * (0.6 + (0 if np.isnan(hz) else hz / 5000))
         d, b = rng.uniform(0.08, 0.2), 0.8
         # algunos pozos empezaron antes de la ventana (edad censurada)
         first_prod = start + int(rng.integers(-24, months - 2))
@@ -57,6 +58,7 @@ def make_snapshot_frame(n_wells: int = 300, first: tuple[int, int] = (2024, 1), 
                     "provincia": "Neuquén",
                     "tipo_de_recurso": "NO CONVENCIONAL",
                     "sub_tipo_recurso": "SHALE",
+                    "largo_horizontal_m": hz,
                 }
             )
     return pd.DataFrame(rows)
