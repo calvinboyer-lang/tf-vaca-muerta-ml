@@ -105,6 +105,7 @@ Hiperparámetros con `--tune`: grilla `max_depth` ∈ {4, 6, 8, 10, 12} × `min_
 
 - Los tiempos se midieron en el contenedor de desarrollo, no en GKE. Se completan con los Jobs de GKE (sección 1).
 - Los artefactos pesan entre 5 y 18 KB.
+- **Reproducibilidad entre entornos:** con el mismo snapshot (sha256 `04a1ebb3…`), `train-all -Tune` dio métricas idénticas en el contenedor de desarrollo, en la PC del autor (Windows, Python 3.12.10, ~4 s por modelo) y en un Job dentro de k3d con la imagen `training:local` (v2_notef: MAE 560,8, R² 0,635, CV 572,6 ± 29,0; 10,7 s en total incluyendo la conexión a PostgreSQL). La corrida en k3d no se promovió (mejora 0,00 % < 1 %) y quedó registrada en la tabla `training_runs`.
 - **Punto 4 de la devolución:** reentrenar exactamente la misma configuración **no** promueve una versión nueva. La evaluación es sobre el mismo holdout fijo y la versión vigente se re-evalúa con el dataset actual. Una mejora pequeña (v2 con `--tune`, 0,5 %) tampoco se promueve, porque su intervalo bootstrap incluye el cero.
 
 ### 2.7 Declinación (punto 3)
@@ -126,6 +127,42 @@ Pozos del holdout con los 6 meses en la población (341 pozos), cambio entre el 
 - La figura también muestra **subidas** al inicio de la producción (pozo 166568): el pozo empieza a producir unos 6 meses después de la perforación y tarda en estabilizarse. Ningún modelo capta ese tramo.
 
 ## 3. Servicio de inferencia
+
+### 3.0 Validación local en k3d (11/11/2026)
+
+Antes de GKE se validó el circuito completo en la PC del autor (Windows 11, 8 GB de RAM, Docker Desktop, k3d v5.9.0 con k3s v1.35.5, 1 server + 1 agent). La API corrió con requests 100m/256Mi y HPA 1–4 (`values-k3s.yaml`), y PostgreSQL con un PVC `local-path` de 2 Gi.
+
+| Prueba | Resultado |
+|---|---|
+| `/healthz` | `ok` tras cargar las 3 versiones vigentes desde `/artifacts` (hostPath) |
+| `/models` | v1 `v1-20261111T212728`, v2 `v2-20261111T212736`, v2_notef `v2_notef-20261111T212741`; sin errores de carga; 3.278 pozos indexados |
+| Entrenamiento en el cluster | Job desde el CronJob `training-v2-notef`: mismas métricas, no promovido, run registrado en PostgreSQL |
+| Carga (k6 en el cluster, 10 VUs, 1 min) | 7.567 pedidos, **100,7 req/s**, p50 76 ms, p95 **168 ms**, p99 231 ms, máx. 3.319 ms, **0 % errores** |
+| HPA | Escaló de 1 a 4 réplicas (el máximo) durante la prueba; al terminar la CPU bajó al 3 % |
+| Registro de predicciones | `/stats` informó 7.568 predicciones de `v2_notef-20261111T212741` en PostgreSQL (las de k6 más una manual) |
+
+- El máximo de 3,3 s coincide con el escalado: los pods nuevos reciben tráfico mientras el nodo está saturado (k3d corre en la misma PC que k6 y Docker Desktop). En GKE se separa ese efecto midiendo con réplicas fijas.
+- Durante la validación aparecieron y se corrigieron dos detalles de presentación: el JSON no declaraba `charset=utf-8` (PowerShell 5.1 mostraba mal los acentos), y la nota "tef supuesto" aparecía también en v2_notef, que no usa TEF.
+
+### 3.0.1 Caso de inferencia comentado: pozo 166692 (holdout)
+
+El pozo 166692 (YPF, La Angostura Sur I, surgencia natural, profundidad 6.641 m, primera producción 2024-10) pertenece al holdout (hash 10 < 20): ningún modelo lo vio al entrenar. `GET /wells/166692`:
+
+| Mes | Real (m³) | TEF | v1 | v2 | v2_notef |
+|---|---:|---:|---:|---:|---:|
+| 2026-01 | 5.664 | 31 | 3.476,3 | 4.151,0 | 3.386,6 |
+| 2026-02 | 4.678 | 28 | 3.476,3 | 3.319,7 | 3.386,6 |
+| 2026-03 | 4.960 | 31 | 3.476,3 | 3.319,7 | 3.386,6 |
+| 2026-04 | 4.141 | 29 | 3.476,3 | 3.319,7 | 3.386,6 |
+| 2026-05 | 4.502 | 31 | 3.476,3 | 2.967,8 | 2.247,9 |
+| 2026-06 | 4.258 | 30 | 3.476,3 | 2.967,8 | 2.247,9 |
+| **MAE del pozo** | | | **≈ 1.225** | **≈ 1.360** | **≈ 1.693** |
+
+`POST /predict {"idpozo": 166692}` (v2_notef, julio 2026) devolvió **2.247,9 m³**, sin categorías no vistas ni valores fuera de rango.
+
+- Es un pozo de alta producción (≈ 4.700 m³/mes contra una mediana de 698) y los tres modelos lo **subestiman**: el árbol lo ubica en hojas con pozos parecidos pero menos productivos.
+- **Salto escalonado:** al pasar de 18 a 19 meses de edad (mayo), v2_notef cambia de hoja y la estimación cae un 34 %, mientras la producción real baja de forma gradual. Es la limitación estructural del árbol descripta en §2.7.
+- v1 queda mejor en este pozo, aunque en el holdout completo es claramente peor (MAE 696 contra 561). Un caso aislado ilustra el comportamiento pero no reemplaza la métrica global.
 
 ### 3.1 Metodología
 
