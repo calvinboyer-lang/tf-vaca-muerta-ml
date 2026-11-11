@@ -27,6 +27,24 @@ La CI (`ci.yml`) corre en cada push: tests, validación de Terraform/charts/Powe
 | [docs/resultados.md](docs/resultados.md) | Pruebas de entrenamiento e inferencia (plantilla a completar) |
 | [docs/reflexion.md](docs/reflexion.md) | Alcances, limitaciones, ética y qué falta para producción |
 
+## Estructura
+
+```
+vm_ml/            código compartido: datos, variables, evaluación, registro de modelos, pozos
+training/         servicio de entrenamiento (CLI + Dockerfile) -> model.joblib + metadata.json
+api/              API FastAPI (Dockerfile): /predict, /healthz, /metrics, /models, /wells, /stats
+helm/charts/      api (Deployment + HPA), postgres (StatefulSet), training (CronJobs)
+terraform/        red, GKE con Workload Identity, Artifact Registry, bucket y cuentas de servicio
+observability/    kube-prometheus-stack, Loki, Alloy, alertas y dashboard
+loadtest/         k6 (script + Job en el cluster)
+scripts/          data_vm.py, versions.py, bootstrap-gcp.ps1, compute-tags.sh
+data/snapshots/   snapshot versionado del dataset (csv.gz + manifest con sha256)
+notebooks/        00_colab_original.ipynb (entrega previa) y 01_tf_vaca_muerta.ipynb (VS Code)
+docs/             documentación obligatoria
+tests/            pytest con datos sintéticos
+tasks.ps1         atajos para PowerShell (equivalente al Makefile del template)
+```
+
 ## Primeros pasos (Windows, PowerShell, VS Code)
 
 ```powershell
