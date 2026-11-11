@@ -159,6 +159,9 @@ class ServingState:
 
         row, sources = build_request_row(well, period, overrides)
         numeric, categorical = feature_columns(handle.name)
+        if "tef" not in numeric:
+            # El supuesto del TEF solo se informa si el modelo usa esa variable.
+            sources = [s for s in sources if not s.startswith("tef supuesto")]
         missing = [c for c in numeric + categorical if row.get(c) is None]
         if missing:
             raise ValueError(f"faltan variables para {handle.name}: {missing} (envíelas o indique un idpozo)")

@@ -49,6 +49,9 @@ def test_predict_by_well_fills_features(state, trained_store):
     assert out["prediccion_m3_mes"] >= 0
     assert out["entrada"]["edad_meses"] is not None
     assert "tef" not in out["entrada"]  # v2_notef no usa TEF
+    assert not any(f.startswith("tef supuesto") for f in out["fuentes"])
+    out_v1 = state.predict("v1", idpozo, None, None, {})
+    assert "tef supuesto = días del mes" in out_v1["fuentes"]
     out_v2 = state.predict("v2", idpozo, 2026, 7, {"tef": 20})
     assert out_v2["entrada"]["tef"] == 20
     assert out_v2["periodo"] == "2026-07"
