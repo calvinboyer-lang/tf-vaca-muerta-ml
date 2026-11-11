@@ -27,6 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request, Response  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
@@ -88,12 +89,19 @@ async def lifespan(_: FastAPI):
     pred_log.stop()
 
 
+class UTF8JSONResponse(JSONResponse):
+    # Charset explícito: Windows PowerShell 5.1 (Invoke-RestMethod) decodifica
+    # como ISO-8859-1 si falta, y los acentos salen como "lÃnea".
+    media_type = "application/json; charset=utf-8"
+
+
 app = FastAPI(
     title="TF Vaca Muerta: producción mensual de petróleo",
     version="1.0.0",
     description="Estimación académica de producción mensual (m³) de pozos shale de Vaca Muerta. "
     "No es un pronóstico industrial validado.",
     lifespan=lifespan,
+    default_response_class=UTF8JSONResponse,
 )
 
 
