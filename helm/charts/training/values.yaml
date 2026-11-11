@@ -17,7 +17,9 @@ dataset: datasets/REEMPLAZAR.csv.gz
 store:
   uri: /artifacts          # gs://<bucket>/vm en GKE
   hostPath: ""             # /artifacts en k3d
-tune: false
+# Búsqueda de hiperparámetros (GroupKFold) en cada entrenamiento: ~6 s con el
+# dataset actual. Con ella se promovió v2_notef (ver docs/resultados.md §2.6).
+tune: true
 extraArgs: []
 
 database:

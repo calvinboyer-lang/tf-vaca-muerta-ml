@@ -1,6 +1,6 @@
 # Resultados de las pruebas y análisis
 
-> **Estado:** plantilla. Se completa con mediciones REALES (salidas de `train`, de `versions`, líneas `RESULT` de k6 y capturas de Grafana). No se escriben números que no hayan salido de una corrida.
+> **Estado:** la sección 2 (entrenamiento) está completa con corridas reales del 11/11/2026. Las secciones 1 y 3 se completan con las mediciones en GKE (líneas `RESULT` de k6 y capturas de Grafana). No se escriben números que no hayan salido de una corrida.
 
 ## 1. Arquitectura efectivamente usada
 
@@ -18,46 +18,112 @@
 
 ## 2. Ciclo de entrenamiento
 
-### 2.1 Datos y respuesta a la devolución (punto 1)
+Corridas del 11/11/2026 sobre el snapshot `vm_shale_202601_202606` (sha256 `04a1ebb3…b3b2d5`): tabla 9 del ArcGIS, más el padrón (capa 0) y las trayectorias (capa 10) descargadas ese día. scikit-learn 1.5.2, Python 3.12. Se reproducen con `.\tasks.ps1 train-all` y con el notebook.
 
-Configuración original (notebook, sección 3.1): `DecisionTreeRegressor(max_depth=6, min_samples_leaf=20)`, `GroupShuffleSplit(test_size=0.2, random_state=42)` por `idpozo`.
+### 2.1 Datos
+
+| Etapa | Registros | Pozos |
+|---|---:|---:|
+| Vaca Muerta · no convencional · shale | 18.857 | 3.278 |
+| Petrolíferos | 13.295 | — |
+| Petrolíferos en extracción efectiva (población) | **12.321** | **2.212** |
+
+- Meses: 2026-01 a 2026-06. `prod_pet`: mediana 698 m³/mes, media 1.285, P99 8.038 y máximo 14.579; 1,6 % de registros en cero.
+- **Edad del pozo:** el padrón (`FECHA_INIC`) da fecha para el 100 % de la población.
+  - En los 201 pozos que empiezan a producir dentro del semestre, la primera producción llega una mediana de **7 meses** después de `FECHA_INIC` (P10 = 5). La fecha es, por lo tanto, el **inicio de la perforación**, y la variable se interpreta como "meses desde el inicio de la perforación".
+  - El P90 de 117 meses corresponde a pozos viejos que no produjeron en enero y volvieron a producir después.
+- **Largo horizontal** (capa 10): cubre el 52,3 % de la población.
+- Concentración de la población: YPF tiene el 66,3 % de los registros, Vista el 11,2 % y Shell el 7,0 %. Por área: Loma Campana 27,1 %, La Amarga Chica 14,8 % y Bandurria Sur 9,5 %.
+
+### 2.2 Reproducción del R² original (punto 1 de la devolución)
+
+Mismos 12.321 registros del notebook de Colab, `DecisionTreeRegressor(max_depth=6, min_samples_leaf=20)`.
 
 | Separación | MAE | RMSE | R² |
 |---|---:|---:|---:|
-| Por pozo, semilla 42 (original) | | | |
-| Por pozo, árbol sin límites | | | |
-| Aleatoria por fila | | | |
+| Por pozo, `GroupShuffleSplit(test_size=0.2, random_state=42)` (original) | 703,1 | 1.222,1 | **0,476** |
+| Por pozo, semilla 42, árbol **sin** límites | 891,9 | 1.681,9 | 0,008 |
+| Aleatoria por fila (mezcla meses de un pozo) | 639,7 | 1.128,3 | 0,511 |
 
-### 2.2 Validación repetida (10 semillas, conjunto de desarrollo)
+- El 0,48 se reproduce cuando se usan `min_samples_leaf=20` y `max_depth=6`.
+- Un árbol sin límites sobreajusta (R² ≈ 0), lo que probablemente explica la diferencia con la corrida del docente.
+- Separar por fila infla el R² en 0,035 porque el modelo ve otros meses del mismo pozo.
+
+### 2.3 Validación repetida (10 separaciones por pozo, 75/25, conjunto de desarrollo)
 
 | Versión | Modelo | MAE (m³/mes) | RMSE | R² |
-|---|---|---|---|---|
-| v1 | promedio | | | |
-| v1 | lineal | | | |
-| v1 | árbol | | | |
-| v2 | árbol | | | |
-| v2_notef | árbol | | | |
+|---|---|---:|---:|---:|
+| — | Predecir el promedio | 1.170 ± 29 | 1.686 ± 72 | 0,00 |
+| v1 | Regresión lineal | 884 ± 19 | 1.393 ± 55 | 0,316 ± 0,021 |
+| v1 | Árbol | 706 ± 35 | 1.233 ± 65 | 0,464 ± 0,040 |
+| v2 | Regresión lineal | 799 ± 27 | 1.287 ± 70 | 0,415 ± 0,050 |
+| v2 | Árbol | **513 ± 27** | 923 ± 68 | **0,699 ± 0,034** |
+| v2_notef | Regresión lineal | 820 ± 28 | 1.326 ± 67 | 0,379 ± 0,049 |
+| v2_notef | Árbol | 585 ± 34 | 1.059 ± 76 | 0,604 ± 0,039 |
 
-### 2.3 Holdout fijo y validación temporal
+- La variabilidad entre semillas es de unos ±0,04 de R², así que diferencias menores entre modelos no son concluyentes con una sola separación.
+- **De v1 a v2:** el MAE baja un 27 % (de 706 a 513) y la diferencia es unas 7 veces el desvío entre semillas. La edad del pozo concentra el 71 % de la importancia del árbol v2; después vienen TEF (11 %) y profundidad (8 %).
+- **Costo de no usar el TEF:** quitarlo (v2 → v2_notef) sube el MAE de 513 a 585 (+14 %). Aun así, v2_notef supera claramente a v1, que sí usa el TEF.
 
-| Versión | MAE holdout | R² holdout | MAE train | Temporal (mismos pozos) | Temporal (pozos nuevos) |
-|---|---:|---:|---:|---:|---:|
-| v1 | | | | | |
-| v2 | | | | | |
-| v2_notef | | | | | |
+### 2.4 Holdout fijo (432 pozos, 20 %) y validación temporal
 
-### 2.4 Versiones, tiempos y promoción
+| Versión | MAE train | R² train | MAE holdout | R² holdout | Temporal, mismos pozos (MAE / R²) | Temporal, pozos nuevos (MAE / R²) |
+|---|---:|---:|---:|---:|---:|---:|
+| v1 | 654 | 0,526 | 696 | 0,465 | 652 / 0,483 | 751 / 0,449 |
+| v2 | 450 | 0,767 | 493 | 0,721 | 519 / 0,635 | 535 / 0,708 |
+| v2_notef | 488 | 0,708 | 588 | 0,605 | 591 / 0,528 | 644 / 0,592 |
 
-Salida de `.\tasks.ps1 versions -Model <m>` y `GET /stats` (tabla `training_runs`):
+- **Validación temporal:** se entrena con enero–abril (pozos de desarrollo) y se prueba con mayo–junio. Los resultados son del mismo orden que la validación por pozo, así que el modelo no depende de ver el mes a estimar.
+- **Sobreajuste:** la brecha entre train y holdout es moderada (0,05 a 0,10 de R²).
 
-| Versión | Dataset | Parámetros | MAE holdout | CV MAE ± desvío | Fit (s) | Total (s) | ¿Promovida? | Motivo |
-|---|---|---|---:|---:|---:|---:|---|---|
+### 2.5 Largo horizontal (capa 10)
 
-Experimento que pide la devolución (punto 4): se reentrena la **misma** configuración y se verifica que **no** se promueve (mejora 0 % < 1 %). Después se reentrena con `--tune` y se documenta la decisión con el intervalo bootstrap.
+| Versión | MAE | R² |
+|---|---:|---:|
+| v2 | 513 ± 27 | 0,699 ± 0,034 |
+| v2 + largo horizontal | 515 ± 27 | 0,698 ± 0,033 |
+| v2_notef | 585 ± 34 | 0,604 ± 0,039 |
+| v2_notef + largo horizontal | 591 ± 37 | 0,601 ± 0,040 |
 
-### 2.5 Declinación (punto 3)
+- La correlación de Spearman entre largo horizontal y producción es 0,38, pero **no mejora el modelo**.
+- Motivos: solo cubre el 52 % de los pozos, y está correlacionado con la profundidad informada (ρ = 0,65; la profundidad parece incluir la rama horizontal) y con la edad (ρ = −0,41: los pozos nuevos son más largos).
+- **No se incorpora.**
 
-Captura de `GET /wells/{idpozo}` o del gráfico del notebook (sección 4), con un análisis de por qué el árbol queda casi plano.
+### 2.6 Versiones, tiempos y promoción
+
+Hiperparámetros con `--tune`: grilla `max_depth` ∈ {4, 6, 8, 10, 12} × `min_samples_leaf` ∈ {5, 10, 20, 50}, con GroupKFold(5) sobre el conjunto de desarrollo.
+
+| Versión | Parámetros | MAE holdout | CV MAE | Fit (s) | Total (s) | ¿Promovida? | Motivo (registrado en metadata.json) |
+|---|---|---:|---:|---:|---:|---|---|
+| v1 base | depth 6, leaf 20 | 696,5 | 706 ± 35 | 0,02 | 1,2 | Sí | No había versión vigente |
+| v1 `--tune` | depth 6, leaf 5 | 698,9 | 709 ± 36 | 0,02 | 4,2 | No | Mejora −0,35 % < 1 % |
+| v2 base | depth 8, leaf 20 | 492,7 | 513 ± 27 | 0,04 | 1,7 | Sí | No había versión vigente |
+| v2 `--tune` | depth 10, leaf 5 | 490,2 | 512 ± 26 | 0,05 | 7,0 | No | Mejora 0,51 % < 1 % (IC 90 % [−15,8; 21,1] m³) |
+| v2_notef base | depth 10, leaf 20 | 588,4 | 585 ± 34 | 0,05 | 1,7 | Sí | No había versión vigente |
+| v2_notef `--tune` | depth 8, leaf 5 | 560,8 | 573 ± 29 | 0,04 | 6,1 | **Sí** | Mejora 4,69 %, IC 90 % [1,7; 54,2] m³ > 0 |
+| v2_notef `--tune` (repetida) | depth 8, leaf 5 | 560,8 | 573 ± 29 | 0,04 | 6,1 | No | Mejora 0,00 % < 1 % |
+
+- Los tiempos se midieron en el contenedor de desarrollo, no en GKE. Se completan con los Jobs de GKE (sección 1).
+- Los artefactos pesan entre 5 y 18 KB.
+- **Punto 4 de la devolución:** reentrenar exactamente la misma configuración **no** promueve una versión nueva. La evaluación es sobre el mismo holdout fijo y la versión vigente se re-evalúa con el dataset actual. Una mejora pequeña (v2 con `--tune`, 0,5 %) tampoco se promueve, porque su intervalo bootstrap incluye el cero.
+
+### 2.7 Declinación (punto 3)
+
+Pozos del holdout con los 6 meses en la población (341 pozos), cambio entre el primer y el último mes:
+
+| Modelo | Grupo | Pozos | Cambio real (mediana) | Cambio estimado (mediana) | Pozos con estimación constante |
+|---|---|---:|---:|---:|---:|
+| v1 | Todos | 341 | −12,5 % | 0,0 % | 55,7 % |
+| v1 | Jóvenes (≤ 24 meses al inicio) | 82 | −30,1 % | 0,0 % | 35,4 % |
+| v2 | Todos | 341 | −12,5 % | 0,0 % | 49,3 % |
+| v2 | Jóvenes | 82 | −30,1 % | **−27,4 %** | 17,1 % |
+| v2_notef | Jóvenes | 82 | −30,1 % | −20,1 % | 30,5 % |
+
+![Real vs. estimado en pozos del holdout](img/declinacion_pozos_holdout.png)
+
+- Con la edad del pozo, v2 **sigue la declinación de los pozos jóvenes**: estima −27 % frente al −30 % real, cuando v1 quedaba plano en todos.
+- En los pozos maduros, que declinan más lento, el árbol sigue asignando los 6 meses a la misma hoja y la estimación queda constante. Es una limitación estructural de un árbol con hojas de ≥ 5 a 20 registros.
+- La figura también muestra **subidas** al inicio de la producción (pozo 166568): el pozo empieza a producir unos 6 meses después de la perforación y tarda en estabilizarse. Ningún modelo capta ese tramo.
 
 ## 3. Servicio de inferencia
 

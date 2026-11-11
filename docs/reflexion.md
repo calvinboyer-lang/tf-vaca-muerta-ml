@@ -11,17 +11,17 @@
 ## 2. Limitaciones del modelo
 
 - **Ventana corta de datos:** la tabla pública cubre un semestre de 2026. Las métricas tienen varianza alta entre separaciones (por eso se informa promedio ± desvío) y no prueban que el modelo funcione en otros años o contextos de precio y actividad.
-- **Declinación:** el árbol asigna los meses de un pozo a la misma hoja y la estimación queda casi plana mientras la producción real cae (ver `resultados.md` §2.5). Es una limitación estructural de un árbol sobre variables casi constantes por pozo. Alternativas a probar: la producción del mes anterior como variable (requiere la serie histórica) o curvas de Arps por pozo.
-- **Edad del pozo:** sale de `FECHA_INIC` del padrón. Hay que confirmar si es inicio de perforación o de producción (el manifest compara ambas); la diferencia introduce un desfase de meses.
-- **Variables faltantes:** etapas de fractura, arena y agua bombeadas (Adjunto IV, otro dataset), presiones, choke. El largo horizontal se incorporó al dataset; su efecto se evalúa en el notebook.
+- **Declinación:** con la edad del pozo, v2 sigue la caída de los pozos jóvenes (−27 % estimado contra −30 % real), pero en los pozos maduros el árbol asigna los 6 meses a la misma hoja y la estimación queda plana (ver `resultados.md` §2.7). Es una limitación estructural de un árbol sobre variables casi constantes por pozo. Alternativas a probar: la producción del mes anterior como variable (requiere la serie histórica) o curvas de Arps por pozo.
+- **Edad del pozo:** sale de `FECHA_INIC` del padrón, que resultó ser el inicio de la **perforación**: la producción empieza unos 7 meses después (mediana). El desfase varía entre pozos (P10 = 5 meses) y agrega ruido. Además, ningún modelo capta la subida de los primeros meses de producción.
+- **Variables faltantes:** etapas de fractura, arena y agua bombeadas (Adjunto IV, otro dataset), presiones, choke. El largo horizontal (capa 10) se evaluó y no mejora el modelo: cubre el 52 % de los pozos y su información ya está en la profundidad y la edad.
 - **TEF:** v1 y v2 lo necesitan y solo se conoce al cerrar el mes. Si no se informa, la API supone el mes completo, lo que sobrestima en meses con paradas.
 - **Categorías nuevas:** una operadora o área que no estaba en el entrenamiento se codifica como "ninguna categoría" (la respuesta lo marca en `categorias_no_vistas`).
 
 ## 3. Implicancias éticas
 
 - **Datos:** públicos y agregados por pozo, sin datos personales. Igual se cita la fuente, la fecha de descarga y el filtro aplicado (manifest), y no se redistribuye el dataset completo de la Secretaría, solo el subconjunto filtrado.
-- **Sesgos:** la población está dominada por pocas operadoras y áreas (en particular YPF y Loma Campana). El modelo aprende mejor esos casos. Incluir la operadora puede reproducir diferencias operativas o de reporte entre empresas en lugar de diferencias geológicas. Pozos parados o con producción cero se excluyen por diseño (extracción efectiva), así que el modelo no sirve para estimar paradas.
-- **Uso:** es una estimación académica con error medio del orden de `<MAE>` m³/mes. No debe usarse para decisiones de inversión, regalías, reservas ni seguridad sin validación de ingeniería. La API lo dice en su descripción y devuelve el MAE de referencia en cada respuesta.
+- **Sesgos:** la población está dominada por pocas operadoras y áreas: YPF tiene el 66 % de los registros y Loma Campana el 27 %. El modelo aprende mejor esos casos. Incluir la operadora puede reproducir diferencias operativas o de reporte entre empresas en lugar de diferencias geológicas. Pozos parados o con producción cero se excluyen por diseño (extracción efectiva), así que el modelo no sirve para estimar paradas.
+- **Uso:** es una estimación académica con error medio del orden de 560 m³/mes (v2_notef, holdout) frente a una producción mediana de 698 m³/mes. No debe usarse para decisiones de inversión, regalías, reservas ni seguridad sin validación de ingeniería. La API lo dice en su descripción y devuelve el MAE de referencia en cada respuesta.
 - **Transparencia:** cada versión documenta datos, parámetros, métricas y por qué fue o no promovida. Las predicciones quedan registradas con versión y latencia.
 
 ## 4. Qué falta para producción real
