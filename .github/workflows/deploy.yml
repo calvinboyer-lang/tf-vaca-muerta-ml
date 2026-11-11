@@ -27,7 +27,7 @@ on:
         type: boolean
         default: true
       charts:
-        description: "Charts a instalar (separados por espacio)"
+        description: "Charts a instalar (separados por espacio; 'ninguno' = solo infraestructura)"
         type: string
         default: "postgres training api"
       observability:
@@ -132,6 +132,7 @@ jobs:
                   --set store.uri="$STORE" \
                   --set serviceAccount.gcpServiceAccount="vm-api@$PROJECT_ID.iam.gserviceaccount.com" \
                   --wait --timeout 6m ;;
+              ninguno|none|-) echo "sin charts (solo infraestructura)" ;;
               *) echo "chart desconocido: $chart"; exit 1 ;;
             esac
           done
