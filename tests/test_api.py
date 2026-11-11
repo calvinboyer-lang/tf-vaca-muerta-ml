@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
-
 import pytest
 
 from api.service import ModelNotLoaded, ServingState, WellNotFound
@@ -121,7 +119,10 @@ def client(trained_store, monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     import api.main as main
 
-    main = importlib.reload(main)
+    # Las métricas de Prometheus se registran una sola vez por proceso: en vez de
+    # recargar el módulo se reemplaza el estado por uno que apunta al store de prueba.
+    monkeypatch.setattr(main, "state", ServingState(trained_store[0], main.MODELS, "v2_notef", on_reload=main._on_reload))
+    monkeypatch.setattr(main, "RELOAD_INTERVAL_S", 0)
     with TestClient(main.app) as c:
         yield c
 

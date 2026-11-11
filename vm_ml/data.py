@@ -146,6 +146,83 @@ def arcgis_fetch(
     return df.drop(columns=["OBJECTID"], errors="ignore")
 
 
+def arcgis_fetch_by_ids(
+    layer: int,
+    id_field: str,
+    ids: list[int],
+    fields: list[str] | str = "*",
+    base: str = config.ARCGIS_BASE,
+    chunk: int = 150,
+) -> pd.DataFrame:
+    """Descarga de una capa solo las filas de los pozos indicados (consultas IN por bloques)."""
+    out_fields = fields if isinstance(fields, str) else ",".join(fields)
+    session = _session()
+    frames = []
+    ids = sorted({int(i) for i in ids})
+    for start in range(0, len(ids), chunk):
+        block = ids[start : start + chunk]
+        params = {
+            "where": f"{id_field} IN ({','.join(map(str, block))})",
+            "outFields": out_fields,
+            "returnGeometry": "false",
+            "f": "json",
+        }
+        # POST: la lista de ids no entra cómoda en una URL
+        resp = session.post(f"{base}/{layer}/query", data=params, timeout=120)
+        resp.raise_for_status()
+        payload = resp.json()
+        if "error" in payload:
+            raise RuntimeError(payload["error"])
+        frames.append(pd.DataFrame([f["attributes"] for f in payload.get("features", [])]))
+        print(f"  capa {layer}: {min(start + chunk, len(ids)):,}/{len(ids):,} pozos consultados", flush=True)
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+
+# Capa 0 "Pozos" (padrón): IDENTIFICA = idpozo, FECHA_INIC = fecha de inicio.
+POZOS_LAYER = 0
+POZOS_FIELDS = ["IDENTIFICA", "SIGLA", "FECHA_INIC", "FECHA_FIN_", "ASFECHA_IN", "TIPO_ESTAD", "PROFUNDIDA", "TIPO_POZO"]
+# Capa 10 "Trayectorias de pozos (Vaca Muerta)": idpo, md, tvd, hz (largo horizontal).
+TRAYECTORIAS_LAYER = 10
+TRAYECTORIAS_FIELDS = ["idpo", "md", "tvd", "hz", "pnl_md"]
+
+
+def _epoch_to_month_idx(series: pd.Series) -> pd.Series:
+    """ArcGIS entrega las fechas como milisegundos desde 1970 (UTC)."""
+    values = pd.to_numeric(series, errors="coerce")
+    dates = pd.to_datetime(values, unit="ms", errors="coerce", utc=True)
+    if dates.isna().all():  # por si vienen como texto
+        dates = pd.to_datetime(series, errors="coerce", dayfirst=True, utc=True)
+    return dates.dt.year * 12 + dates.dt.month - 1
+
+
+def padron_from_pozos(pozos: pd.DataFrame) -> pd.DataFrame:
+    """Capa Pozos -> idpozo, primera_prod_idx (mes de FECHA_INIC)."""
+    pozos = pozos.copy()
+    pozos.columns = [c.upper() for c in pozos.columns]
+    out = pd.DataFrame(
+        {
+            "idpozo": pd.to_numeric(pozos["IDENTIFICA"], errors="coerce"),
+            "primera_prod_idx": _epoch_to_month_idx(pozos["FECHA_INIC"]),
+        }
+    ).dropna()
+    out = out.astype({"idpozo": "int64", "primera_prod_idx": "int64"})
+    return out.groupby("idpozo", as_index=False)["primera_prod_idx"].min()
+
+
+def trajectory_features(tray: pd.DataFrame) -> pd.DataFrame:
+    """Capa Trayectorias -> una fila por pozo (si hay varias trayectorias, la de mayor largo horizontal)."""
+    tray = tray.copy()
+    tray.columns = [c.lower() for c in tray.columns]
+    for col in ["md", "tvd", "hz"]:
+        tray[col] = pd.to_numeric(tray[col], errors="coerce")
+    tray["idpozo"] = pd.to_numeric(tray["idpo"], errors="coerce")
+    tray = tray.dropna(subset=["idpozo"]).sort_values("hz", ascending=False)
+    tray = tray.drop_duplicates("idpozo").astype({"idpozo": "int64"})
+    return tray.rename(columns={"hz": "largo_horizontal_m", "md": "md_m", "tvd": "tvd_m"})[
+        ["idpozo", "largo_horizontal_m", "md_m", "tvd_m"]
+    ]
+
+
 # ----------------------------------------------------------------------------
 # CSV de datos.gob.ar (puede pesar cientos de MB): se filtra por bloques
 # ----------------------------------------------------------------------------
@@ -246,7 +323,8 @@ def add_well_age(df: pd.DataFrame, padron: pd.DataFrame | None = None) -> pd.Dat
 
     df["edad_meses"] = (df["mes_idx"] - df["primera_prod_idx"]).clip(lower=0)
     df["edad_censurada"] = (df["fuente_edad"] == "historia") & (df["primera_obs_idx"] == first_window)
-    return df.drop(columns=["primera_obs_idx"])
+    # primera_obs_idx se conserva para validar la fecha del padrón contra la historia.
+    return df
 
 
 def write_snapshot(
@@ -282,11 +360,33 @@ def write_snapshot(
             "fuente_padron_pct": round(100 * float((pop["fuente_edad"] == "padron").mean()), 2),
             "censurada_pct": round(100 * float(pop["edad_censurada"].mean()), 2),
             "sin_dato_pct": round(100 * float(pop["edad_meses"].isna().mean()), 2),
+            "padron_vs_historia": _padron_check(pop, first),
         },
+        "largo_horizontal_cobertura_pct": (
+            round(100 * float(pop["largo_horizontal_m"].notna().mean()), 2) if "largo_horizontal_m" in pop else 0.0
+        ),
     }
     manifest_path = out_dir / f"{dataset_id}.manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     return SnapshotInfo(dataset_id, path, manifest_path, manifest)
+
+
+def _padron_check(pop: pd.DataFrame, first_window: int) -> dict | None:
+    """Pozos que empezaron DENTRO de la ventana: meses entre la fecha del padrón y la
+    primera producción observada (valida qué representa la fecha del padrón)."""
+    if "primera_obs_idx" not in pop or not (pop["fuente_edad"] == "padron").any():
+        return None
+    wells = pop[(pop["fuente_edad"] == "padron") & (pop["primera_obs_idx"] > first_window)]
+    wells = wells.drop_duplicates("idpozo")
+    if wells.empty:
+        return None
+    diff = wells["primera_obs_idx"] - wells["primera_prod_idx"]
+    return {
+        "pozos": int(len(wells)),
+        "mediana_meses": float(diff.median()),
+        "p10_meses": float(diff.quantile(0.1)),
+        "p90_meses": float(diff.quantile(0.9)),
+    }
 
 
 def load_snapshot(path: str | Path) -> tuple[pd.DataFrame, dict]:

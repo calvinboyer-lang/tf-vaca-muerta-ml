@@ -1,0 +1,63 @@
+# Valores para GKE. En k3d se agrega -f values-k3s.yaml.
+#   helm upgrade --install api helm/charts/api \
+#     --set image.repository=$AR/api --set image.tag=<sha> \
+#     --set store.uri=gs://<proyecto>-tfvm-artifacts/vm \
+#     --set serviceAccount.gcpServiceAccount=vm-api@<proyecto>.iam.gserviceaccount.com
+image:
+  repository: api
+  tag: local
+  pullPolicy: IfNotPresent
+
+# Solo se usa con autoscaling.enabled=false (pruebas con 1, 3 y 5 réplicas fijas).
+replicaCount: 2
+
+service:
+  port: 8081
+
+store:
+  # gs://<bucket>/<prefijo> en GKE; /artifacts (carpeta montada) en k3d.
+  uri: /artifacts
+  # k3d: carpeta del nodo montada en /artifacts (solo lectura). Vacío en GKE.
+  hostPath: ""
+
+models: "v1,v2,v2_notef"
+defaultModel: v2_notef
+# Cada réplica revisa current.json con esta frecuencia: tras promover una
+# versión, todas las réplicas la cargan sin reiniciar pods.
+reloadIntervalSeconds: 120
+
+database:
+  enabled: true
+  host: postgres
+  port: 5432
+  name: vm
+  user: vm
+  secretName: postgres-auth   # creado fuera del repo (ver docs/despliegue.md)
+  secretKey: password
+
+serviceAccount:
+  create: true
+  name: vm-api
+  # Workload Identity: cuenta de GCP con permiso de LECTURA sobre el bucket.
+  gcpServiceAccount: ""
+
+# Un proceso por pod. Los valores se justifican con las pruebas de carga
+# (docs/resultados.md): requests chicos para que el HPA reaccione y quepan
+# hasta 10 réplicas en el node pool; límites para que un pod no acapare el nodo.
+resources:
+  requests:
+    cpu: 250m
+    memory: 384Mi
+  limits:
+    cpu: "1"
+    memory: 768Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 60
+  # Ventanas de estabilización (s). Por defecto Kubernetes usa 0 para subir y
+  # 300 para bajar; se exponen para documentar el comportamiento en las pruebas.
+  scaleUpStabilizationSeconds: 0
+  scaleDownStabilizationSeconds: 120

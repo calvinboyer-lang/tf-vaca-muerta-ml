@@ -12,6 +12,9 @@ Desde la raíz del repo (PowerShell o bash):
   3) (Alternativa) Filtrar un CSV grande de datos.gob.ar ya descargado:
        python scripts/data_vm.py csv --path C:\\Descargas\\produccion_no_convencional.csv
 
+     Además descarga, para esos pozos, la capa 0 "Pozos" (padrón con FECHA_INIC)
+     y la capa 10 "Trayectorias" (largo horizontal hz, md, tvd).
+
   4) Armar el snapshot (une las descargas, calcula la edad del pozo):
        python scripts/data_vm.py build
        python scripts/data_vm.py build --padron C:\\Descargas\\padron_pozos.csv
@@ -38,13 +41,20 @@ import pandas as pd  # noqa: E402
 
 from vm_ml import config  # noqa: E402
 from vm_ml.data import (  # noqa: E402
+    POZOS_FIELDS,
+    POZOS_LAYER,
+    TRAYECTORIAS_FIELDS,
+    TRAYECTORIAS_LAYER,
     add_well_age,
     arcgis_count,
     arcgis_describe,
     arcgis_fetch,
+    arcgis_fetch_by_ids,
     clean_raw,
     filter_large_csv,
     load_padron,
+    padron_from_pozos,
+    trajectory_features,
     write_snapshot,
 )
 
@@ -86,6 +96,19 @@ def cmd_arcgis(args) -> None:
         months = sorted({(int(a), int(m)) for a, m in zip(df["anio"], df["mes"])})
         print(f"  -> {out.name}: {len(df):,} filas, {df['idpozo'].nunique():,} pozos, "
               f"meses {months[0]}..{months[-1]} ({len(months)})")
+    if args.no_extras:
+        return
+    ids = set()
+    for f in RAW.glob("arcgis_capa*.csv.gz"):
+        ids |= set(pd.read_csv(f, usecols=["idpozo"])["idpozo"].dropna().astype(int))
+    print(f"Padrón (capa {POZOS_LAYER} Pozos) para {len(ids):,} pozos ...")
+    pozos = arcgis_fetch_by_ids(POZOS_LAYER, "IDENTIFICA", sorted(ids), POZOS_FIELDS, base=args.base)
+    pozos.to_csv(RAW / f"arcgis_pozos_{stamp}.csv.gz", index=False, compression="gzip")
+    print(f"  -> arcgis_pozos_{stamp}.csv.gz: {len(pozos):,} filas")
+    print(f"Trayectorias (capa {TRAYECTORIAS_LAYER}) para {len(ids):,} pozos ...")
+    tray = arcgis_fetch_by_ids(TRAYECTORIAS_LAYER, "idpo", sorted(ids), TRAYECTORIAS_FIELDS, base=args.base)
+    tray.to_csv(RAW / f"arcgis_trayectorias_{stamp}.csv.gz", index=False, compression="gzip")
+    print(f"  -> arcgis_trayectorias_{stamp}.csv.gz: {len(tray):,} filas")
 
 
 def cmd_csv(args) -> None:
@@ -97,14 +120,32 @@ def cmd_csv(args) -> None:
 
 
 def cmd_build(args) -> None:
-    inputs = [Path(p) for p in args.inputs] if args.inputs else sorted(RAW.glob("*.csv.gz"))
-    inputs = [p for p in inputs if p.name != "arcgis_capas.json"]
+    if args.inputs:
+        inputs = [Path(p) for p in args.inputs]
+    else:
+        inputs = sorted(RAW.glob("arcgis_capa*.csv.gz")) + sorted(RAW.glob("csv_*.csv.gz"))
     if not inputs:
         sys.exit("No hay descargas en data/raw/. Corré primero 'arcgis' o 'csv'.")
-    print("Uniendo:", ", ".join(p.name for p in inputs))
+    print("Producción:", ", ".join(p.name for p in inputs))
     frames = [pd.read_csv(p, low_memory=False) for p in inputs]
     df = clean_raw(pd.concat(frames, ignore_index=True))
-    padron = load_padron(args.padron, args.padron_id_col, args.padron_date_col) if args.padron else None
+
+    # Edad: padrón CSV indicado, o la capa Pozos descargada (FECHA_INIC).
+    padron, padron_source = None, None
+    if args.padron:
+        padron = load_padron(args.padron, args.padron_id_col, args.padron_date_col)
+        padron_source = Path(args.padron).name
+    else:
+        pozos_files = sorted(RAW.glob("arcgis_pozos_*.csv.gz"))
+        if pozos_files and not args.sin_padron:
+            padron = padron_from_pozos(pd.read_csv(pozos_files[-1]))
+            padron_source = f"{pozos_files[-1].name} (FECHA_INIC)"
+    print("Edad del pozo:", padron_source or "primer mes con producción en la historia descargada")
+
+    tray_files = sorted(RAW.glob("arcgis_trayectorias_*.csv.gz"))
+    if tray_files:
+        df = df.merge(trajectory_features(pd.read_csv(tray_files[-1])), on="idpozo", how="left")
+        print("Trayectorias:", tray_files[-1].name)
     # La edad se calcula con TODA la historia descargada; recién después se
     # recortan los meses (--desde), así la edad no queda censurada al recortar.
     df = add_well_age(df, padron)
@@ -112,8 +153,10 @@ def cmd_build(args) -> None:
         anio, mes = (int(x) for x in args.desde.split("-"))
         df = df[df["mes_idx"] >= anio * 12 + mes - 1].reset_index(drop=True)
     keep = [c for c in config.SNAPSHOT_COLUMNS if c in df.columns]
-    keep += ["mes_idx", "primera_prod_idx", "edad_meses", "edad_censurada", "fuente_edad"]
-    info = write_snapshot(df[keep], SNAPSHOTS, [p.name for p in inputs], Path(args.padron).name if args.padron else None)
+    keep += ["mes_idx", "primera_obs_idx", "primera_prod_idx", "edad_meses", "edad_censurada", "fuente_edad"]
+    keep += [c for c in ["largo_horizontal_m", "md_m", "tvd_m"] if c in df.columns]
+    sources = [p.name for p in inputs] + [p.name for p in tray_files[-1:]]
+    info = write_snapshot(df[keep], SNAPSHOTS, sources, padron_source)
     print(json.dumps(info.manifest, indent=2, ensure_ascii=False))
     print(f"\nSnapshot: {info.path}")
 
@@ -139,6 +182,7 @@ def main() -> None:
 
     a = sub.add_parser("arcgis", help="descargar Vaca Muerta shale de capas ArcGIS")
     a.add_argument("--layers", type=int, nargs="+", default=[config.DEFAULT_LAYER])
+    a.add_argument("--no-extras", action="store_true", help="no descargar padrón (capa 0) ni trayectorias (capa 10)")
     a.set_defaults(func=cmd_arcgis)
 
     c = sub.add_parser("csv", help="filtrar un CSV de datos.gob.ar")
@@ -150,6 +194,7 @@ def main() -> None:
     b.add_argument("--padron", help="CSV del padrón de pozos con fecha de primera producción")
     b.add_argument("--padron-id-col")
     b.add_argument("--padron-date-col")
+    b.add_argument("--sin-padron", action="store_true", help="ignorar la capa Pozos y usar solo la historia")
     b.add_argument("--desde", help="descartar meses anteriores, formato AAAA-MM (la edad usa toda la historia)")
     b.set_defaults(func=cmd_build)
 

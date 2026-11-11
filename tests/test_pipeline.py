@@ -152,3 +152,18 @@ def test_artifact_tampering_is_rejected(snapshot, tmp_path):
     with pytest.raises(ValueError, match="sha256"):
         registry.load_current(store, "v1")
     json.dumps(pointer)  # el puntero es JSON serializable
+
+
+def test_arcgis_padron_and_trajectories():
+    from vm_ml.data import padron_from_pozos, trajectory_features
+
+    # FECHA_INIC llega como milisegundos desde 1970: 2025-03-15 -> índice mensual de 2025-03
+    ms = int(pd.Timestamp("2025-03-15", tz="UTC").timestamp() * 1000)
+    pozos = pd.DataFrame({"IDENTIFICA": [7.0, 8.0], "FECHA_INIC": [ms, None]})
+    padron = padron_from_pozos(pozos)
+    assert padron.to_dict("records") == [{"idpozo": 7, "primera_prod_idx": 2025 * 12 + 2}]
+
+    tray = pd.DataFrame({"idpo": [7, 7, 8], "md": [6000, 6100, 5000], "tvd": [3000, 3000, 2900], "hz": [2500, 2800, None]})
+    feats = trajectory_features(tray).set_index("idpozo")
+    assert feats.loc[7, "largo_horizontal_m"] == 2800
+    assert 8 in feats.index

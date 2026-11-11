@@ -1,0 +1,77 @@
+# Deployment sin estado: el modelo se descarga del store al arrancar.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "api.fullname" . }}
+  labels:
+    app: {{ include "api.fullname" . }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ include "api.fullname" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "api.fullname" . }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: api
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.port }}
+              name: http
+          env:
+            - name: STORE_URI
+              value: {{ .Values.store.uri | quote }}
+            - name: MODELS
+              value: {{ .Values.models | quote }}
+            - name: DEFAULT_MODEL
+              value: {{ .Values.defaultModel | quote }}
+            - name: RELOAD_INTERVAL_S
+              value: {{ .Values.reloadIntervalSeconds | quote }}
+            {{- if .Values.database.enabled }}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.secretName }}
+                  key: {{ .Values.database.secretKey }}
+            - name: DATABASE_URL
+              value: "postgresql://{{ .Values.database.user }}:$(PGPASSWORD)@{{ .Values.database.host }}:{{ .Values.database.port }}/{{ .Values.database.name }}"
+            {{- end }}
+          # Readiness: 503 hasta que el modelo por defecto está cargado.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          # Liveness: solo que el proceso responda (no depende del modelo).
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.store.hostPath }}
+          volumeMounts:
+            - name: artifacts
+              mountPath: {{ .Values.store.uri }}
+              readOnly: true
+          {{- end }}
+      {{- if .Values.store.hostPath }}
+      volumes:
+        - name: artifacts
+          hostPath:
+            path: {{ .Values.store.hostPath }}
+            type: Directory
+      {{- end }}

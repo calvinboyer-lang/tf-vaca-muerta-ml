@@ -1,0 +1,21 @@
+# k3d local: imagen importada con `k3d image import` y modelos en la carpeta
+# artifacts\ del repo, montada en los nodos como /artifacts (tasks.ps1 k3d-up).
+image:
+  repository: api
+  tag: local
+  pullPolicy: Never
+store:
+  uri: /artifacts
+  hostPath: /artifacts
+serviceAccount:
+  gcpServiceAccount: ""
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 768Mi
+autoscaling:
+  minReplicas: 1
+  maxReplicas: 4
