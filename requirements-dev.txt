@@ -1,0 +1,6 @@
+# Entorno local en VS Code (notebook + tests + scripts de datos).
+#   python -m venv .venv ; .\.venv\Scripts\Activate.ps1 ; pip install -r requirements-dev.txt
+-r training/requirements.txt
+pytest==8.3.3
+matplotlib==3.9.2
+ipykernel==6.29.5

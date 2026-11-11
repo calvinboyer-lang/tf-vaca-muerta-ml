@@ -1,0 +1,51 @@
+# CI del Trabajo Final (fase 1: datos y entrenamiento).
+#   1) pytest de vm_ml y del servicio de entrenamiento (datos sintéticos)
+#   2) docker build de la imagen de entrenamiento + smoke test con datos sintéticos
+# En las fases siguientes se agregan la API y la publicación en Artifact
+# Registry con OIDC (Workload Identity Federation), como en el laboratorio 8.
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - name: pytest
+        run: uv run --python 3.12 --with-requirements training/requirements.txt --with pytest pytest -q
+
+  build-training:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - name: docker build training
+        run: docker build -f training/Dockerfile -t "training:${{ github.sha }}" .
+
+      - name: Smoke test (entrenamiento con datos sintéticos)
+        run: |
+          uv run --python 3.12 --with-requirements training/requirements.txt python scripts/data_vm.py synthetic --wells 120
+          mkdir -p smoke && chmod 777 smoke
+          docker run --rm -v "$PWD/data/synthetic:/data:ro" -v "$PWD/smoke:/out" \
+            "training:${{ github.sha }}" --model v2 \
+            --dataset "/data/$(ls data/synthetic | grep csv.gz)" --store /out
+          test -f smoke/models/v2/current.json
+          cat smoke/models/v2/current.json

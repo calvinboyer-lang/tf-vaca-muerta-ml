@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Datos: las descargas crudas NO se versionan; el snapshot sí (data/snapshots)
+data/raw/
+data/synthetic/
+artifacts/
+
+# Terraform / OpenTofu
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+tfplan
+backend.hcl
+
+# Secretos: nunca al repo
+*.json.key
+*-key.json
+.env
