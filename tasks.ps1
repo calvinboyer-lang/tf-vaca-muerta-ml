@@ -61,8 +61,11 @@ function Exec([string]$Exe, [string[]]$CmdArgs) {
 }
 
 function Ensure-PostgresSecret {
-    & kubectl get secret postgres-auth 2>$null | Out-Null
-    if ($LASTEXITCODE -ne 0) {
+    # --ignore-not-found: si no existe, salida vacía y sin error (en PowerShell 5.1
+    # cualquier texto en stderr con ErrorActionPreference=Stop corta el script).
+    $existing = & kubectl get secret postgres-auth --ignore-not-found -o name
+    if ($LASTEXITCODE -ne 0) { throw "kubectl no pudo consultar el cluster" }
+    if (-not $existing) {
         # Clave aleatoria generada en el momento: nunca se escribe en el repo.
         $bytes = New-Object byte[] 18
         [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
@@ -128,10 +131,12 @@ Pruebas (k3d o GKE, según el contexto de kubectl)
         else {
             $created = $false
             if (Get-Command py -ErrorAction SilentlyContinue) {
+                $ErrorActionPreference = "Continue"
                 & py -3.12 -m venv .venv 2>$null
                 $created = ($LASTEXITCODE -eq 0) -and (Test-Path $Py)
             }
             if (-not $created) {
+                $ErrorActionPreference = "Continue"
                 $v = & python -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null
                 if ($v -eq "3.12") { & python -m venv .venv; $created = Test-Path $Py }
             }
