@@ -3,7 +3,6 @@
 Tablas:
   training_runs   un registro por entrenamiento (métricas, duración, decisión)
   predictions     un registro por petición a /predict (entrada, salida, latencia)
-  wells           atributos por pozo para que la API los busque por idpozo
 
 Si DATABASE_URL no está definida o la base no responde, las funciones no hacen
 nada (o devuelven None) y lo informan en el log: la predicción no debe caerse
@@ -53,16 +52,6 @@ CREATE TABLE IF NOT EXISTS predictions (
 );
 CREATE INDEX IF NOT EXISTS predictions_ts_idx ON predictions (ts_utc);
 
-CREATE TABLE IF NOT EXISTS wells (
-    idpozo            BIGINT PRIMARY KEY,
-    empresa           TEXT,
-    areayacimiento    TEXT,
-    profundidad       DOUBLE PRECISION,
-    tipoextraccion    TEXT,
-    primera_prod_idx  INTEGER,
-    ultimo_mes_idx    INTEGER,
-    dataset_id        TEXT NOT NULL
-);
 """
 
 

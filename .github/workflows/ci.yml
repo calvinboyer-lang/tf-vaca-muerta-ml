@@ -1,8 +1,15 @@
-# CI del Trabajo Final (fase 1: datos y entrenamiento).
-#   1) pytest de vm_ml y del servicio de entrenamiento (datos sintéticos)
-#   2) docker build de la imagen de entrenamiento + smoke test con datos sintéticos
-# En las fases siguientes se agregan la API y la publicación en Artifact
-# Registry con OIDC (Workload Identity Federation), como en el laboratorio 8.
+# CI del Trabajo Final.
+#   1) pytest: vm_ml, entrenamiento y API (datos sintéticos)
+#   2) docker build de api y training + smoke test:
+#      el contenedor de training entrena con datos sintéticos y el de la API
+#      carga ese modelo y responde /healthz y /predict
+#   3) push a main o tag vX.Y.Z: publica las imágenes en Artifact Registry con
+#      OIDC (Workload Identity Federation). Sin llaves JSON.
+#
+# Variables del repositorio (Settings > Secrets and variables > Actions > Variables):
+#   GCP_PROJECT_ID, GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_SERVICE_ACCOUNT
+#   opcionales: GCP_REGION (us-central1), AR_REPOSITORY (tf-vaca-muerta)
+# Hasta que exista GCP_PROJECT_ID el job publish queda SKIPPED (gris).
 name: ci
 
 on:
@@ -25,9 +32,11 @@ jobs:
           python-version: "3.12"
 
       - name: pytest
-        run: uv run --python 3.12 --with-requirements training/requirements.txt --with pytest pytest -q
+        run: >-
+          uv run --python 3.12 --with-requirements training/requirements.txt
+          --with-requirements api/requirements.txt --with pytest --with httpx pytest -q
 
-  build-training:
+  build:
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -37,15 +46,63 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: docker build training
-        run: docker build -f training/Dockerfile -t "training:${{ github.sha }}" .
+      - name: docker build api y training
+        run: |
+          docker build -f training/Dockerfile -t "training:${{ github.sha }}" .
+          docker build -f api/Dockerfile -t "api:${{ github.sha }}" .
 
-      - name: Smoke test (entrenamiento con datos sintéticos)
+      - name: Smoke test (entrenar con sintéticos, servir y predecir)
         run: |
           uv run --python 3.12 --with-requirements training/requirements.txt python scripts/data_vm.py synthetic --wells 120
-          mkdir -p smoke && chmod 777 smoke
-          docker run --rm -v "$PWD/data/synthetic:/data:ro" -v "$PWD/smoke:/out" \
-            "training:${{ github.sha }}" --model v2 \
-            --dataset "/data/$(ls data/synthetic | grep csv.gz)" --store /out
-          test -f smoke/models/v2/current.json
-          cat smoke/models/v2/current.json
+          mkdir -p artifacts && chmod 777 artifacts
+          snap=$(ls data/synthetic | grep csv.gz)
+          for m in v1 v2 v2_notef; do
+            docker run --rm -v "$PWD/data/synthetic:/data:ro" -v "$PWD/artifacts:/artifacts" \
+              "training:${{ github.sha }}" --model "$m" --dataset "/data/$snap" --store /artifacts
+          done
+          docker run -d --name api -p 8081:8081 -v "$PWD/artifacts:/artifacts:ro" "api:${{ github.sha }}"
+          if ! curl -sf --retry 30 --retry-delay 1 --retry-all-errors http://localhost:8081/healthz; then
+            docker logs api; exit 1
+          fi
+          idpozo=$(python3 -c "import gzip,csv;r=csv.DictReader(gzip.open('data/synthetic/$snap','rt'));print(next(x['idpozo'] for x in r if x['tipopozo']=='Petrolífero'))")
+          curl -sf -X POST http://localhost:8081/predict -H 'Content-Type: application/json' -d "{\"idpozo\": $idpozo}"
+          echo
+          curl -sf http://localhost:8081/metrics | grep -E '^predict_requests_total|^model_info'
+          docker rm -f api
+
+  publish:
+    if: github.event_name == 'push' && vars.GCP_PROJECT_ID != ''
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      matrix:
+        service: [api, training]
+    env:
+      REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+      AR_REPO: ${{ vars.AR_REPOSITORY || 'tf-vaca-muerta' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configurar Docker para Artifact Registry
+        run: gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+
+      - name: Build y push de ${{ matrix.service }}
+        env:
+          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}
+        run: |
+          mapfile -t refs < <(./scripts/compute-tags.sh "$IMAGE" "$GITHUB_SHA" "$GITHUB_REF")
+          args=()
+          for r in "${refs[@]}"; do args+=(-t "$r"); done
+          docker build "${args[@]}" -f "${{ matrix.service }}/Dockerfile" .
+          for r in "${refs[@]}"; do docker push "$r"; echo "pushed $r"; done
