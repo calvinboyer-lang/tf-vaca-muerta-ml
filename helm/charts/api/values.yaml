@@ -44,9 +44,13 @@ serviceAccount:
 # Un proceso por pod. Los valores se justifican con las pruebas de carga
 # (docs/resultados.md): requests chicos para que el HPA reaccione y quepan
 # hasta 10 réplicas en el node pool; límites para que un pod no acapare el nodo.
+# CPU pedida = consumo real: bajo carga cada réplica usa ~0,9 núcleos (1 proceso
+# uvicorn). Con 250m el scheduler metía 3 réplicas en un nodo de 2 vCPU y no
+# escalaba (prueba r3, docs/resultados.md §3.2). Con 700m entran 2 por nodo
+# e2-standard-2 y el autoescalado de nodos agrega nodos cuando hacen falta.
 resources:
   requests:
-    cpu: 250m
+    cpu: 700m
     memory: 384Mi
   limits:
     cpu: "1"
