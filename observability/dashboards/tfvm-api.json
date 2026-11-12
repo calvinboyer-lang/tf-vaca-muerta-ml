@@ -1,447 +1,447 @@
 {
- "uid": "tfvm-api",
- "title": "TF Vaca Muerta - API de inferencia",
- "tags": [
-  "tf",
-  "vaca-muerta"
- ],
- "timezone": "browser",
- "schemaVersion": 39,
- "version": 1,
- "refresh": "10s",
- "time": {
-  "from": "now-30m",
-  "to": "now"
- },
- "panels": [
-  {
-   "type": "timeseries",
-   "title": "Peticiones por segundo a /predict",
-   "datasource": {
-    "type": "prometheus",
-    "uid": "prometheus"
-   },
-   "gridPos": {
-    "x": 0,
-    "y": 0,
-    "w": 12,
-    "h": 8
-   },
-   "fieldConfig": {
-    "defaults": {
-     "unit": "reqps"
-    },
-    "overrides": []
-   },
-   "options": {
-    "legend": {
-     "displayMode": "table",
-     "placement": "bottom",
-     "calcs": [
-      "mean",
-      "max",
-      "lastNotNull"
-     ]
-    }
-   },
-   "targets": [
-    {
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "expr": "sum by (status) (rate(predict_requests_total[1m]))",
-     "legendFormat": "{{status}}",
-     "refId": "A"
-    }
-   ],
-   "id": 1
+  "uid": "tfvm-api",
+  "title": "TF Vaca Muerta - API de inferencia",
+  "tags": [
+    "tf",
+    "vaca-muerta"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
   },
-  {
-   "type": "timeseries",
-   "title": "Latencia de /predict",
-   "datasource": {
-    "type": "prometheus",
-    "uid": "prometheus"
-   },
-   "gridPos": {
-    "x": 12,
-    "y": 0,
-    "w": 12,
-    "h": 8
-   },
-   "fieldConfig": {
-    "defaults": {
-     "unit": "s"
-    },
-    "overrides": []
-   },
-   "options": {
-    "legend": {
-     "displayMode": "table",
-     "placement": "bottom",
-     "calcs": [
-      "mean",
-      "max",
-      "lastNotNull"
-     ]
-    }
-   },
-   "targets": [
+  "panels": [
     {
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "expr": "histogram_quantile(0.50, sum by (le) (rate(predict_latency_seconds_bucket[1m])))",
-     "legendFormat": "p50",
-     "refId": "A"
-    },
-    {
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "expr": "histogram_quantile(0.95, sum by (le) (rate(predict_latency_seconds_bucket[1m])))",
-     "legendFormat": "p95",
-     "refId": "B"
-    },
-    {
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "expr": "histogram_quantile(0.99, sum by (le) (rate(predict_latency_seconds_bucket[1m])))",
-     "legendFormat": "p99",
-     "refId": "C"
-    }
-   ],
-   "id": 2
-  },
-  {
-   "type": "timeseries",
-   "title": "Réplicas de la API (HPA)",
-   "datasource": {
-    "type": "prometheus",
-    "uid": "prometheus"
-   },
-   "gridPos": {
-    "x": 0,
-    "y": 8,
-    "w": 12,
-    "h": 8
-   },
-   "fieldConfig": {
-    "defaults": {
-     "unit": "short"
-    },
-    "overrides": []
-   },
-   "options": {
-    "legend": {
-     "displayMode": "table",
-     "placement": "bottom",
-     "calcs": [
-      "mean",
-      "max",
-      "lastNotNull"
-     ]
-    }
-   },
-   "targets": [
-    {
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "expr": "kube_horizontalpodautoscaler_status_desired_replicas{horizontalpodautoscaler=\"api\"}",
-     "legendFormat": "deseadas (HPA)",
-     "refId": "A"
-    },
-    {
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "expr": "kube_deployment_status_replicas_available{deployment=\"api\"}",
-     "legendFormat": "disponibles",
-     "refId": "B"
-    }
-   ],
-   "id": 3
-  },
-  {
-   "type": "timeseries",
-   "title": "CPU por pod de la API (núcleos)",
-   "datasource": {
-    "type": "prometheus",
-    "uid": "prometheus"
-   },
-   "gridPos": {
-    "x": 12,
-    "y": 8,
-    "w": 12,
-    "h": 8
-   },
-   "fieldConfig": {
-    "defaults": {
-     "unit": "short"
-    },
-    "overrides": []
-   },
-   "options": {
-    "legend": {
-     "displayMode": "table",
-     "placement": "bottom",
-     "calcs": [
-      "mean",
-      "max",
-      "lastNotNull"
-     ]
-    }
-   },
-   "targets": [
-    {
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"default\",pod=~\"api-.*\",container=\"api\"}[1m]))",
-     "legendFormat": "{{pod}}",
-     "refId": "A"
-    }
-   ],
-   "id": 4
-  },
-  {
-   "type": "timeseries",
-   "title": "Memoria por pod de la API",
-   "datasource": {
-    "type": "prometheus",
-    "uid": "prometheus"
-   },
-   "gridPos": {
-    "x": 0,
-    "y": 16,
-    "w": 12,
-    "h": 8
-   },
-   "fieldConfig": {
-    "defaults": {
-     "unit": "bytes"
-    },
-    "overrides": []
-   },
-   "options": {
-    "legend": {
-     "displayMode": "table",
-     "placement": "bottom",
-     "calcs": [
-      "mean",
-      "max",
-      "lastNotNull"
-     ]
-    }
-   },
-   "targets": [
-    {
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"default\",pod=~\"api-.*\",container=\"api\"})",
-     "legendFormat": "{{pod}}",
-     "refId": "A"
-    }
-   ],
-   "id": 5
-  },
-  {
-   "type": "timeseries",
-   "title": "Nodos: CPU usada",
-   "datasource": {
-    "type": "prometheus",
-    "uid": "prometheus"
-   },
-   "gridPos": {
-    "x": 12,
-    "y": 16,
-    "w": 12,
-    "h": 8
-   },
-   "fieldConfig": {
-    "defaults": {
-     "unit": "short"
-    },
-    "overrides": []
-   },
-   "options": {
-    "legend": {
-     "displayMode": "table",
-     "placement": "bottom",
-     "calcs": [
-      "mean",
-      "max",
-      "lastNotNull"
-     ]
-    }
-   },
-   "targets": [
-    {
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "expr": "sum by (node) (rate(container_cpu_usage_seconds_total{id=\"/\"}[1m]))",
-     "legendFormat": "{{node}}",
-     "refId": "A"
-    }
-   ],
-   "id": 6
-  },
-  {
-   "type": "timeseries",
-   "title": "Errores y predicciones fuera de rango",
-   "datasource": {
-    "type": "prometheus",
-    "uid": "prometheus"
-   },
-   "gridPos": {
-    "x": 0,
-    "y": 24,
-    "w": 12,
-    "h": 8
-   },
-   "fieldConfig": {
-    "defaults": {
-     "unit": "short"
-    },
-    "overrides": []
-   },
-   "options": {
-    "legend": {
-     "displayMode": "table",
-     "placement": "bottom",
-     "calcs": [
-      "mean",
-      "max",
-      "lastNotNull"
-     ]
-    }
-   },
-   "targets": [
-    {
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "expr": "sum(rate(predict_requests_total{status=~\"5..\"}[1m]))",
-     "legendFormat": "5xx/s",
-     "refId": "A"
-    },
-    {
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "expr": "sum(rate(predict_requests_total{status=~\"4..\"}[1m]))",
-     "legendFormat": "4xx/s",
-     "refId": "B"
-    },
-    {
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "expr": "sum(rate(predict_out_of_range_total[5m]))",
-     "legendFormat": "fuera de rango/s",
-     "refId": "C"
-    }
-   ],
-   "id": 7
-  },
-  {
-   "type": "table",
-   "title": "Versión cargada por réplica",
-   "datasource": {
-    "type": "prometheus",
-    "uid": "prometheus"
-   },
-   "gridPos": {
-    "x": 12,
-    "y": 24,
-    "w": 12,
-    "h": 8
-   },
-   "targets": [
-    {
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "expr": "max by (model, version, pod) (model_info)",
-     "format": "table",
-     "instant": true,
-     "refId": "A"
-    },
-    {
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "expr": "max by (model) (model_holdout_mae_m3)",
-     "format": "table",
-     "instant": true,
-     "refId": "B"
-    }
-   ],
-   "transformations": [
-    {
-     "id": "merge"
-    },
-    {
-     "id": "organize",
-     "options": {
-      "excludeByName": {
-       "Time": true,
-       "Value #A": true
+      "type": "timeseries",
+      "title": "Peticiones por segundo a /predict",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
       },
-      "renameByName": {
-       "Value #B": "MAE holdout (m3)"
-      }
-     }
-    }
-   ],
-   "id": 8
-  },
-  {
-   "type": "logs",
-   "title": "Logs de la API y del entrenamiento (Loki)",
-   "datasource": {
-    "type": "loki",
-    "uid": "loki"
-   },
-   "gridPos": {
-    "x": 0,
-    "y": 32,
-    "w": 24,
-    "h": 10
-   },
-   "targets": [
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (status) (rate(predict_requests_total[1m]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ],
+      "id": 1
+    },
     {
-     "datasource": {
-      "type": "loki",
-      "uid": "loki"
-     },
-     "expr": "{namespace=\"default\", app=~\"api.*|training\"}",
-     "refId": "A"
+      "type": "timeseries",
+      "title": "Latencia de /predict",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(predict_latency_seconds_bucket[1m])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(predict_latency_seconds_bucket[1m])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(predict_latency_seconds_bucket[1m])))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "id": 2
+    },
+    {
+      "type": "timeseries",
+      "title": "Réplicas de la API (HPA)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "kube_horizontalpodautoscaler_status_desired_replicas{horizontalpodautoscaler=\"api\"}",
+          "legendFormat": "deseadas (HPA)",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "kube_deployment_status_replicas_available{deployment=\"api\"}",
+          "legendFormat": "disponibles",
+          "refId": "B"
+        }
+      ],
+      "id": 3
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU por pod de la API (núcleos)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"default\",pod=~\"api-.*\",container=\"api\"}[1m]))",
+          "legendFormat": "{{pod}}",
+          "refId": "A"
+        }
+      ],
+      "id": 4
+    },
+    {
+      "type": "timeseries",
+      "title": "Memoria por pod de la API",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"default\",pod=~\"api-.*\",container=\"api\"})",
+          "legendFormat": "{{pod}}",
+          "refId": "A"
+        }
+      ],
+      "id": 5
+    },
+    {
+      "type": "timeseries",
+      "title": "Nodos: CPU usada (núcleos, node-exporter)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (instance) (rate(node_cpu_seconds_total{mode!=\"idle\"}[1m]))",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "id": 6
+    },
+    {
+      "type": "timeseries",
+      "title": "Errores y predicciones fuera de rango",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(predict_requests_total{status=~\"5..\"}[1m]))",
+          "legendFormat": "5xx/s",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(predict_requests_total{status=~\"4..\"}[1m]))",
+          "legendFormat": "4xx/s",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(predict_out_of_range_total[5m]))",
+          "legendFormat": "fuera de rango/s",
+          "refId": "C"
+        }
+      ],
+      "id": 7
+    },
+    {
+      "type": "table",
+      "title": "Versión cargada por réplica",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (model, version, pod) (model_info)",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (model) (model_holdout_mae_m3)",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge"
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value #A": true
+            },
+            "renameByName": {
+              "Value #B": "MAE holdout (m3)"
+            }
+          }
+        }
+      ],
+      "id": 8
+    },
+    {
+      "type": "logs",
+      "title": "Logs de la API y del entrenamiento (Loki)",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{namespace=\"default\", app=~\"api.*|training\"}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true
+      },
+      "id": 9
     }
-   ],
-   "options": {
-    "showTime": true,
-    "wrapLogMessage": true
-   },
-   "id": 9
-  }
- ]
+  ]
 }
