@@ -26,6 +26,7 @@ La CI (`ci.yml`) corre en cada push: tests, validación de Terraform/charts/Powe
 | [docs/despliegue.md](docs/despliegue.md) | Instrucciones reproducibles: local, k3d, GCP y GKE |
 | [docs/resultados.md](docs/resultados.md) | Pruebas de entrenamiento e inferencia (plantilla a completar) |
 | [docs/reflexion.md](docs/reflexion.md) | Alcances, limitaciones, ética y qué falta para producción |
+| [docs/evidencias.md](docs/evidencias.md) | Índice de capturas (estructura del Laboratorio 8) |
 
 ## Estructura
 
