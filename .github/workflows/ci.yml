@@ -16,6 +16,9 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+    # Cambios solo de documentación o capturas no reconstruyen ni publican
+    # imágenes (cada publish suma ~0,5 GB al Artifact Registry).
+    paths-ignore: ["docs/**", "**/*.md", "backup/**"]
   pull_request:
 
 permissions:
