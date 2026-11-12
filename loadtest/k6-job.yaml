@@ -34,6 +34,8 @@ spec:
               value: "__LABEL__"
             - name: MODEL
               value: "__MODEL__"
+            - name: NO_REUSE
+              value: "__NOREUSE__"
           resources:
             requests:
               cpu: 500m      # k6 también consume CPU: reservada para no robársela a la API

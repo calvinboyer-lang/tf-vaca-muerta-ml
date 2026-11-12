@@ -22,6 +22,10 @@ const RAMP = __ENV.RAMP || "15s";
 const SLEEP = Number(__ENV.SLEEP || 0);
 const MODEL = __ENV.MODEL || "";
 const LABEL = __ENV.LABEL || `vus${VUS}`;
+// NO_REUSE=1: una conexión TCP nueva por petición. Con keep-alive (default) cada
+// VU queda pegado al pod que eligió kube-proxy al conectar, y las réplicas que
+// agrega el HPA durante la prueba casi no reciben tráfico (prueba hpa-vus150).
+const NO_REUSE = __ENV.NO_REUSE === "1";
 
 export const options = {
   scenarios: {
@@ -35,6 +39,7 @@ export const options = {
       gracefulRampDown: "5s",
     },
   },
+  noConnectionReuse: NO_REUSE,
   summaryTrendStats: ["avg", "med", "p(90)", "p(95)", "p(99)", "max"],
   // Umbrales solo informativos (no cortan la prueba).
   thresholds: {
@@ -69,6 +74,7 @@ export function handleSummary(data) {
     label: LABEL,
     vus: VUS,
     duration: DURATION,
+    no_reuse: NO_REUSE,
     model: MODEL || "default",
     requests: m.http_reqs.values.count,
     rps: Number(m.http_reqs.values.rate.toFixed(1)),

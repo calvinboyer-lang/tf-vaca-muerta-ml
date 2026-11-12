@@ -27,6 +27,7 @@ param(
     [string]$Duration = "2m",
     [string]$Label = "",
     [string]$LoadModel = "",
+    [switch]$NoReuse,
     [int]$Replicas = 0,
     [string]$Project = $env:GCP_PROJECT_ID,
     [string]$Zone = "us-central1-a",
@@ -254,7 +255,7 @@ cerrá y abrí la terminal, y volvé a correr: .\tasks.ps1 setup
         $Label = ($Label.ToLower() -replace '[^a-z0-9-]', '-')
         $yaml = (Get-Content "loadtest/k6-job.yaml" -Raw) `
             -replace '__LABEL__', $Label -replace '__VUS__', "$Vus" `
-            -replace '__DURATION__', $Duration -replace '__MODEL__', $LoadModel
+            -replace '__DURATION__', $Duration -replace '__MODEL__', $LoadModel -replace '__NOREUSE__', $(if ($NoReuse) { '1' } else { '0' })
         & kubectl create configmap k6-script --from-file=loadtest/k6-predict.js --dry-run=client -o yaml | kubectl apply -f -
         & kubectl delete job "k6-$Label" --ignore-not-found | Out-Null
         $yaml | kubectl apply -f -
