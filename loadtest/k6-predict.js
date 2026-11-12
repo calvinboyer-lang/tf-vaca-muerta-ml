@@ -49,11 +49,16 @@ export const options = {
 };
 
 export function setup() {
-  const res = http.get(`${API_URL}/wells/sample?n=500`);
-  if (res.status !== 200) {
-    throw new Error(`no pude obtener pozos de ${API_URL}/wells/sample: ${res.status} ${res.body}`);
+  // Reintentos: si el cluster está reacomodando pods o nodos (p. ej. el HPA
+  // bajando réplicas), la primera llamada puede fallar sin que la API esté caída.
+  let res;
+  for (let i = 1; i <= 10; i++) {
+    res = http.get(`${API_URL}/wells/sample?n=500`, { timeout: "10s" });
+    if (res.status === 200) return { ids: res.json().idpozo };
+    console.warn(`setup: intento ${i}/10 falló (${res.status}); reintento en 3 s`);
+    sleep(3);
   }
-  return { ids: res.json().idpozo };
+  throw new Error(`no pude obtener pozos de ${API_URL}/wells/sample: ${res.status} ${res.body}`);
 }
 
 export default function (data) {
