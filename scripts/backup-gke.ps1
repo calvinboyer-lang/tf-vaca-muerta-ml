@@ -15,17 +15,21 @@
   Uso (desde la carpeta del repo, con kubectl apuntando a GKE):
     .\scripts\backup-gke.ps1
     .\scripts\backup-gke.ps1 -Desde "2026-11-12T21:00:00Z"
+    .\scripts\backup-gke.ps1 -SoloPrometheus -Destino backup\gke-20261112-2021 -Desde "2026-11-12T21:15:00Z"
 #>
 param(
     [string]$Project = "unlu-ia-boyer-lab-511417",
     # Inicio de la ventana de métricas a exportar (UTC). Por defecto, 12 h atrás.
     [string]$Desde = "",
-    [int]$StepSeconds = 15
+    [int]$StepSeconds = 15,
+    # Repite solo el paso de Prometheus, en una carpeta de respaldo que ya existe.
+    [switch]$SoloPrometheus,
+    [string]$Destino = ""
 )
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
-$dest = "backup\gke-" + (Get-Date -Format "yyyyMMdd-HHmm")
+$dest = if ($Destino) { $Destino } else { "backup\gke-" + (Get-Date -Format "yyyyMMdd-HHmm") }
 New-Item -ItemType Directory -Force -Path "$dest\bucket", "$dest\postgres", "$dest\prometheus", "$dest\k8s" | Out-Null
 Write-Host "Destino: $dest" -ForegroundColor Cyan
 
@@ -40,6 +44,7 @@ function Save-Text([string]$path, [string[]]$argv) {
     $out | Out-File -Encoding utf8 $path
 }
 
+if (-not $SoloPrometheus) {
 # ---- 1. Bucket ---------------------------------------------------------------
 Write-Host "`n[1/4] Bucket de artefactos" -ForegroundColor Yellow
 Run gcloud @("storage", "cp", "-r", "gs://$Project-tfvm-artifacts/vm", "$dest\bucket")
@@ -64,6 +69,8 @@ foreach ($f in @("training_runs.csv", "predictions_resumen.csv", "predictions.cs
 }
 Run kubectl @("exec", "postgres-0", "--", "rm", "-f", "/tmp/training_runs.csv", "/tmp/predictions_resumen.csv", "/tmp/predictions.csv.gz")
 
+}
+
 # ---- 3. Prometheus -----------------------------------------------------------
 Write-Host "`n[3/4] Prometheus (series del dashboard)" -ForegroundColor Yellow
 $end = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
@@ -82,14 +89,23 @@ $series = [ordered]@{
     "pods_pending"        = 'sum(kube_pod_status_phase{namespace="default",phase="Pending"})'
     "nodos"               = 'count(kube_node_info)'
 }
-foreach ($name in $series.Keys) {
-    $body = "query=" + [uri]::EscapeDataString($series[$name]) + "&start=$start&end=$end&step=$StepSeconds"
-    $json = & kubectl -n observability exec $prom -c prometheus -- wget -qO- --post-data $body "http://localhost:9090/api/v1/query_range"
-    if ($LASTEXITCODE -ne 0) { Write-Host "  $($name): falló (se sigue)" -ForegroundColor Red; continue }
-    $json | Out-File -Encoding utf8 "$dest\prometheus\$name.json"
-    Write-Host "  $name"
+# La imagen de Prometheus no trae wget: se consulta por un port-forward temporal.
+$pf = Start-Process kubectl -ArgumentList @("-n", "observability", "port-forward", "pod/$prom", "19090:9090") -PassThru -WindowStyle Hidden
+try {
+    Start-Sleep -Seconds 4
+    foreach ($name in $series.Keys) {
+        try {
+            $r = Invoke-WebRequest -UseBasicParsing -Method Post -Uri "http://127.0.0.1:19090/api/v1/query_range" `
+                -Body @{ query = $series[$name]; start = $start; end = $end; step = $StepSeconds }
+            $r.Content | Out-File -Encoding utf8 "$dest\prometheus\$name.json"
+            Write-Host "  $name"
+        }
+        catch { Write-Host "  $($name): falló ($($_.Exception.Message))" -ForegroundColor Red }
+    }
 }
+finally { Stop-Process -Id $pf.Id -ErrorAction SilentlyContinue }
 
+if (-not $SoloPrometheus) {
 # ---- 4. Estado de Kubernetes -------------------------------------------------
 Write-Host "`n[4/4] Estado de Kubernetes" -ForegroundColor Yellow
 Save-Text "$dest\k8s\hpa_describe.txt"    @("kubectl", "describe", "hpa", "api")
@@ -98,6 +114,8 @@ Save-Text "$dest\k8s\nodos.txt"           @("kubectl", "get", "nodes", "-o", "wi
 Save-Text "$dest\k8s\pods.txt"            @("kubectl", "get", "pods", "-A", "-o", "wide")
 Save-Text "$dest\k8s\recursos.txt"        @("kubectl", "get", "deploy,sts,svc,hpa,cronjob,pvc", "-o", "wide")
 Save-Text "$dest\k8s\helm_list.txt"       @("helm", "list", "-A")
+
+}
 
 Write-Host "`nListo. Contenido:" -ForegroundColor Green
 Get-ChildItem -Recurse -File $dest | ForEach-Object {
