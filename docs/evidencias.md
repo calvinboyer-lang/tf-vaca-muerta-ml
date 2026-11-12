@@ -82,8 +82,14 @@ Estado: ✅ capturada · 🔁 conviene repetirla (comando tapado o incompleta) �
 | 7.4b | `capturas/7.4b_k6_r3_resultados.png` | Resultados k6 de 3 réplicas (requests 250m) | ✅ |
 | 7.4c | — | `kubectl get pods -o wide` mostrando las 3 réplicas en el mismo nodo | ⏳ (se reemplaza por la prueba con 700m) |
 | 7.5 | — | 3 y 5 réplicas con requests de 700m: `get pods -o wide` (nodos) + resultados | ⏳ |
-| 7.6 | — | `kubectl get hpa api -w` con las réplicas subiendo de 2 a más | ⏳ |
-| 7.7 | — | Dashboard durante la carga con HPA (réplicas subiendo y bajando) | ⏳ |
+| 7.6a | `capturas/7.6a_hpa_5_replicas_nodos_nuevos.png` | Prueba con keep-alive: HPA en 5 réplicas y 2 nodos nuevos creados por GKE | ✅ |
+| 7.6b | `capturas/7.6b_hpa_eventos_rescale.png` | `kubectl describe hpa api`: eventos `SuccessfulRescale` de todas las pruebas (2 → 5 → 3 → 9 → 3 → 5 → 6 → 8 → 10 → 4 → 2) con su antigüedad y la política de subida (4 pods o 100 % cada 15 s) | ✅ |
+| 7.7a | `capturas/7.7a_grafana_hpa_vus150_keepalive.png` | HPA con keep-alive: 5 réplicas pero el tráfico queda en ~130 req/s; las réplicas nuevas casi sin CPU | ✅ |
+| 7.7b | `capturas/7.7b_k6_hpa_vus150_keepalive.png` | RESULT: 131,3 req/s, p95 1.520 ms, 0 % errores | ✅ |
+| 7.9a | `capturas/7.9a_grafana_hpa_vus150_noreuse.png` | Primer intento sin keep-alive (interrumpido al relanzar el comando): HPA pide 9, 7 disponibles | ✅ |
+| 7.9b1–3 | `capturas/7.9b1…3_*.png` | 4 réplicas `Pending`: `Insufficient cpu` y `max node group size reached`; HPA en 10 | ✅ |
+| 7.9c | `capturas/7.9c_k6_hpa_noreuse_resultado.png` | RESULT sin keep-alive: 247,7 req/s, p50 255 ms, p95 1.962 ms, 0 % errores | ✅ |
+| 7.9d | `capturas/7.9d_grafana_hpa_noreuse_b.png` | Dashboard: deseadas 10, disponibles 7, pico 295 req/s, CPU repartida entre réplicas | ✅ |
 | 7.8 | `capturas/7.8_describe_pod_pending_k6_insufficient_cpu.png` | Pod de k6 en `Pending` 2,5 min: `FailedScheduling` *0/4 nodes are available: 4 Insufficient cpu* y `NotTriggerScaleUp` *max node group size reached* (4 nodos, el máximo); se programó cuando el HPA bajó réplicas y liberó CPU | ✅ |
 
 ## 8. Estado final (equivalente al 6.1)
