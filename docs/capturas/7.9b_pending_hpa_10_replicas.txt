@@ -1,0 +1,71 @@
+PS C:\Users\Calvin_Boyer\Documents\Codex\2026-11-07\referenced-chatgpt-conversation-this-is-an\lab8-repo\tf-vaca-muerta-ml> $pend = kubectl get pods --field-selector=status.phase=Pending -o name; if ($pend) { $pend; foreach ($p in $pend) { kubectl describe $p | Select-Object -Last 15 } } else { "No hay pods en Pending" }; kubectl get hpa api
+No hay pods en Pending
+NAME   REFERENCE        TARGETS         MINPODS   MAXPODS   REPLICAS   AGE
+api    Deployment/api   cpu: 132%/60%   2         10        5          47m
+PS C:\Users\Calvin_Boyer\Documents\Codex\2026-11-07\referenced-chatgpt-conversation-this-is-an\lab8-repo\tf-vaca-muerta-ml> $pend = kubectl get pods --field-selector=status.phase=Pending -o name; if ($pend) { $pend; foreach ($p in $pend) { kubectl describe $p | Select-Object -Last 15 } } else { "No hay pods en Pending" }; kubectl get hpa api
+pod/api-7c7f6d7f55-82hms
+pod/api-7c7f6d7f55-rdrfn
+pod/api-7c7f6d7f55-vshlk
+pod/api-7c7f6d7f55-xkdvk
+  kube-api-access-hn5cm:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    Optional:                false
+    DownwardAPI:             true
+QoS Class:                   Burstable
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type     Reason             Age   From                Message
+  ----     ------             ----  ----                -------
+  Warning  FailedScheduling   13s   default-scheduler   0/4 nodes are available: 4 Insufficient cpu. no new claims to deallocate, preemption: 0/4 nodes are available: 4 No preemption victims found for incoming pod.
+  Normal   NotTriggerScaleUp  13s   cluster-autoscaler  Pod didn't trigger scale-up: 1 max node group size reached
+  kube-api-access-9gjwc:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    Optional:                false
+    DownwardAPI:             true
+QoS Class:                   Burstable
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type     Reason             Age   From                Message
+  ----     ------             ----  ----                -------
+  Warning  FailedScheduling   28s   default-scheduler   0/4 nodes are available: 4 Insufficient cpu. no new claims to deallocate, preemption: 0/4 nodes are available: 4 No preemption victims found for incoming pod.
+  Normal   NotTriggerScaleUp  28s   cluster-autoscaler  Pod didn't trigger scale-up: 1 max node group size reached
+  kube-api-access-9bnm5:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    Optional:                false
+    DownwardAPI:             true
+QoS Class:                   Burstable
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type     Reason             Age   From                Message
+  ----     ------             ----  ----                -------
+  Warning  FailedScheduling   16s   default-scheduler   0/4 nodes are available: 4 Insufficient cpu. no new claims to deallocate, preemption: 0/4 nodes are available: 4 No preemption victims found for incoming pod.
+  Normal   NotTriggerScaleUp  15s   cluster-autoscaler  Pod didn't trigger scale-up: 1 max node group size reached
+  kube-api-access-m82jg:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    Optional:                false
+    DownwardAPI:             true
+QoS Class:                   Burstable
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type     Reason             Age   From                Message
+  ----     ------             ----  ----                -------
+  Warning  FailedScheduling   31s   default-scheduler   0/4 nodes are available: 4 Insufficient cpu. no new claims to deallocate, preemption: 0/4 nodes are available: 4 No preemption victims found for incoming pod.
+  Normal   NotTriggerScaleUp  31s   cluster-autoscaler  Pod didn't trigger scale-up: 1 max node group size reached
+NAME   REFERENCE        TARGETS         MINPODS   MAXPODS   REPLICAS   AGE
+api    Deployment/api   cpu: 118%/60%   2         10        10         48m
