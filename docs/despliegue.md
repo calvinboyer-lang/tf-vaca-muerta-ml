@@ -124,6 +124,25 @@ Ver `docs/resultados.md` (matriz completa y cómo registrar cada corrida).
 
 ## Apagar (costos)
 
+### Pausa (de un día para otro, sin perder nada)
+
+Bajar los nodos a 0 conserva el cluster, el disco de PostgreSQL, el bucket y las imágenes. **Primero hay que desactivar el autoescalado:** si queda activo, los pods que se quedan sin nodo aparecen como pendientes y GKE vuelve a crear nodos, hasta el máximo (pasó el 11/11: tras el resize a 0 había 4 nodos corriendo).
+
+```powershell
+gcloud container clusters update tfvm-dev-gke --zone us-central1-a --node-pool tfvm-dev-gke-pool --no-enable-autoscaling --quiet
+gcloud container clusters resize tfvm-dev-gke --zone us-central1-a --node-pool tfvm-dev-gke-pool --num-nodes 0 --quiet
+gcloud compute instances list --format="value(name,status)"   # no debe quedar ningún gke-tfvm-*
+```
+
+Para retomar (vuelve a los valores de Terraform: 1–4 nodos):
+
+```powershell
+gcloud container clusters update tfvm-dev-gke --zone us-central1-a --node-pool tfvm-dev-gke-pool --enable-autoscaling --min-nodes 1 --max-nodes 4 --quiet
+gcloud container clusters resize tfvm-dev-gke --zone us-central1-a --node-pool tfvm-dev-gke-pool --num-nodes 1 --quiet
+```
+
+### Final (al terminar el trabajo)
+
 ```powershell
 kubectl delete pvc --all                    # discos de PostgreSQL
 ```
