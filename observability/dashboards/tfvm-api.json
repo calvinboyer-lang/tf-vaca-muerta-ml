@@ -335,7 +335,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(predict_requests_total{status=~\"5..\"}[1m]))",
+          "expr": "(sum(rate(predict_requests_total{status=~\"5..\"}[1m]))) or vector(0)",
           "legendFormat": "5xx/s",
           "refId": "A"
         },
@@ -344,7 +344,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(predict_requests_total{status=~\"4..\"}[1m]))",
+          "expr": "(sum(rate(predict_requests_total{status=~\"4..\"}[1m]))) or vector(0)",
           "legendFormat": "4xx/s",
           "refId": "B"
         },
@@ -353,7 +353,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(predict_out_of_range_total[5m]))",
+          "expr": "(sum(rate(predict_out_of_range_total[5m]))) or vector(0)",
           "legendFormat": "fuera de rango/s",
           "refId": "C"
         }

@@ -66,7 +66,7 @@ Estado: ✅ capturada · 🔁 conviene repetirla (comando tapado o incompleta) �
 | # | Archivo | Qué muestra | Estado |
 |---|---|---|---|
 | 6.1 | `capturas/6.1_grafana_base_sin_carga.png` | Dashboard "TF Vaca Muerta – API de inferencia" con 2 réplicas, CPU por pod; tráfico mínimo (2 consultas manuales, no k6) | ✅ |
-| 6.2 | — | Logs de la API en Grafana → Explore → Loki | ⏳ |
+| 6.2 | `capturas/6.2_grafana_version_por_replica_y_logs_loki.png` | Tabla "Versión cargada por réplica" (trazabilidad modelo/pod/versión/MAE) y logs de la API en Loki (apagado de réplicas al bajar el HPA) | ✅ |
 | 6.3 | — | Alertas cargadas (Grafana → Alerting o Prometheus `/alerts`) | ⏳ |
 
 ## 7. Carga y escalado (equivalente al 5.1 y 5.2)
