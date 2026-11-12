@@ -59,7 +59,8 @@ foreach ($name in $queries.Keys) {
 Run kubectl @("exec", "postgres-0", "--", "gzip", "-f", "/tmp/predictions.csv")
 foreach ($f in @("training_runs.csv", "predictions_resumen.csv", "predictions.csv.gz")) {
     # kubectl cp necesita rutas relativas en Windows (la ':' de 'C:' se confunde con pod:ruta).
-    Run kubectl @("cp", "postgres-0:/tmp/$f", ($dest -replace '\\', '/') + "/postgres/$f")
+    $local = ($dest -replace '\\', '/') + "/postgres/$f"   # se arma aparte: dentro de @(...) la coma se aplica antes que el +
+    Run kubectl @("cp", "postgres-0:/tmp/$f", $local)
 }
 Run kubectl @("exec", "postgres-0", "--", "rm", "-f", "/tmp/training_runs.csv", "/tmp/predictions_resumen.csv", "/tmp/predictions.csv.gz")
 
