@@ -57,8 +57,9 @@ Estado: ✅ capturada · 🔁 conviene repetirla (comando tapado o incompleta) �
 | 5.2a | `capturas/5.2a_gke_train_v1.png` | Job de entrenamiento v1 en GKE: lee/escribe el bucket, promovida | ✅ |
 | 5.2b | `capturas/5.2b_gke_train_v2_v2notef.png` | v2 y v2_notef entrenadas y promovidas en GKE | ✅ |
 | 5.3 | `capturas/5.3_deploy_api_observability.png` | `deploy` #3: helm y observability en Success | ✅ |
+| 5.3b | `capturas/5.3b_deploy5_api_700m.png` | `deploy` #5: API con requests de 700m (imagen `2565ebb`) | ✅ |
 | 5.4 | `capturas/5.4_gke_pods_hpa_observability.png` | Pods de la API, PostgreSQL, HPA 2/10 y stack de observabilidad | 🔁 el comando queda cortado arriba |
-| 5.5 | — | `kubectl get pods` + `/predict` en GKE con la versión `v2_notef-20261112T001844`, en una misma captura | ⏳ |
+| 5.5 | `capturas/5.5_gke_pods_y_predict.png` | Comando visible, encabezado de la tabla, 2 réplicas de la API y `postgres-0` en `Running` con su nodo; `/predict` responde `v2_notef-20261112T001844` (2.247,9 m³) | ✅ |
 
 ## 6. Grafana base, sin carga (equivalente al 4.1)
 
