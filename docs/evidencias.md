@@ -1,6 +1,6 @@
 # Evidencias (capturas)
 
-Índice de capturas del trabajo final, con la misma lógica que los entregables del Laboratorio 8 (CI → Terraform/deploy → pods y `/predict` → Grafana base → carga y HPA → estado final), más las evidencias propias del TF (datos, entrenamiento, k3d, pruebas de carga por réplicas).
+**Anexo de evidencias.** El informe del trabajo final mantiene la estructura de la consigna (arquitectura y decisiones de diseño, instrucciones de despliegue, especificación de endpoints, resultados de pruebas con análisis y reflexión crítica). Estas capturas se **agregan** como respaldo de lo ejecutado; no reemplazan ni reordenan esas secciones. Para cubrir como mínimo las pantallas del Laboratorio 8 se agrupan con la misma lógica (CI → Terraform/deploy → pods y `/predict` → Grafana base → carga y HPA → estado final), más evidencias propias del TF (datos, entrenamiento, k3d).
 
 Criterios (indicaciones del docente):
 
