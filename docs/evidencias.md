@@ -90,6 +90,8 @@ Estado: ✅ capturada · 🔁 conviene repetirla (comando tapado o incompleta) �
 | 7.9b1–3 | `capturas/7.9b1…3_*.png` | 4 réplicas `Pending`: `Insufficient cpu` y `max node group size reached`; HPA en 10 | ✅ |
 | 7.9c | `capturas/7.9c_k6_hpa_noreuse_resultado.png` | RESULT sin keep-alive: 247,7 req/s, p50 255 ms, p95 1.962 ms, 0 % errores | ✅ |
 | 7.9d | `capturas/7.9d_grafana_hpa_noreuse_b.png` | Dashboard: deseadas 10, disponibles 7, pico 295 req/s, CPU repartida entre réplicas | ✅ |
+| 7.10a | `capturas/7.10a_dashboard_final_resumen_pruebas_hpa.png` | Dashboard final, última hora: las tres pruebas con HPA (≈130, ≈240 y 295 req/s; réplicas a 5, 9 y 10), CPU por pod y por nodo | ✅ |
+| 7.10b | `capturas/7.10b_dashboard_final_errores_versiones_loki.png` | Errores 5xx/4xx y fuera de rango en 0 durante todas las pruebas; versión cargada por réplica; logs en Loki | ✅ |
 | 7.8 | `capturas/7.8_describe_pod_pending_k6_insufficient_cpu.png` | Pod de k6 en `Pending` 2,5 min: `FailedScheduling` *0/4 nodes are available: 4 Insufficient cpu* y `NotTriggerScaleUp` *max node group size reached* (4 nodos, el máximo); se programó cuando el HPA bajó réplicas y liberó CPU | ✅ |
 
 ## 8. Estado final (equivalente al 6.1)
