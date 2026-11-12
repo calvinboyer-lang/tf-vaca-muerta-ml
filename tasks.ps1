@@ -259,7 +259,14 @@ cerrá y abrí la terminal, y volvé a correr: .\tasks.ps1 setup
         & kubectl delete job "k6-$Label" --ignore-not-found | Out-Null
         $yaml | kubectl apply -f -
         Write-Host "Esperando el Job k6-$Label (en otra terminal: kubectl get hpa -w)..." -ForegroundColor Yellow
-        Exec kubectl @("wait", "--for=condition=complete", "job/k6-$Label", "--timeout=30m")
+        # Espera a que el Job termine BIEN O MAL: k6 sale con error si se cruzan
+        # los umbrales (p95 > 500 ms o errores > 1 %), y ese resultado también sirve.
+        $deadline = (Get-Date).AddMinutes(30)
+        do {
+            Start-Sleep -Seconds 5
+            $st = & kubectl get "job/k6-$Label" -o jsonpath="{.status.succeeded}/{.status.failed}"
+        } until ($st -match '^1/' -or $st -match '/[1-9]' -or (Get-Date) -gt $deadline)
+        if ($st -match '/[1-9]') { Write-Host "k6 terminó con umbrales cruzados o error (se guarda igual el resultado)" -ForegroundColor Yellow }
         $log = & kubectl logs "job/k6-$Label"
         $log | Select-String -Pattern "RESULT" | ForEach-Object { $_.Line }
         New-Item -ItemType Directory -Force -Path "results" | Out-Null

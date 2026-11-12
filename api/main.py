@@ -141,8 +141,11 @@ def index() -> dict:
     }
 
 
+# Las sondas y /metrics son "async def": corren en el event loop y NO hacen
+# cola detrás de las predicciones (que usan el pool de threads). Con la réplica
+# saturada, una sonda síncrona esperaba >1 s y Kubernetes reiniciaba el pod.
 @app.get("/healthz")
-def healthz() -> Response:
+async def healthz() -> Response:
     """Readiness: 200 solo si el modelo por defecto está cargado (si no, Kubernetes no le manda tráfico)."""
     if not state.ready():
         return Response('{"status":"loading"}', status_code=503, media_type="application/json")
@@ -150,13 +153,13 @@ def healthz() -> Response:
 
 
 @app.get("/livez")
-def livez() -> dict:
+async def livez() -> dict:
     """Liveness: el proceso responde (no depende del modelo ni de la base)."""
     return {"status": "alive"}
 
 
 @app.get("/metrics")
-def metrics() -> Response:
+async def metrics() -> Response:
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
