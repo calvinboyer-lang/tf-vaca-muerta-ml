@@ -98,6 +98,7 @@ Estado: ✅ capturada · 🔁 conviene repetirla (comando tapado o incompleta) �
 
 | # | Archivo | Qué muestra | Estado |
 |---|---|---|---|
-| 8.1 | `capturas/8.1_pausa_nodos_cero.png` | Pausa nocturna: sin nodos de GKE corriendo | ✅ |
+| 8.1 | `capturas/8.1_pausa_nodos_cero.png` | Pausa nocturna del 11/11: sin nodos de GKE corriendo | ✅ |
+| 8.1b | `capturas/8.1b_pausa_nodos_cero_12nov.png` | Pausa del 12/11 tras las pruebas: sin nodos de GKE corriendo | ✅ |
 | 8.2 | — | `helm list -A` vacío / réplica mínima | ⏳ |
 | 8.3 | — | Consola de GCP: clusters y costos al cierre | ⏳ |

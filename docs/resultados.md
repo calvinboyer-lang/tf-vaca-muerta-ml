@@ -1,6 +1,6 @@
 # Resultados de las pruebas y análisis
 
-> **Estado:** la sección 2 (entrenamiento) y §3.0–3.2.3 están completas con corridas reales del 11/11/2026. Faltan §3.2.4 (3 y 5 réplicas con requests de 700m), §3.3 (HPA) y §1 (arquitectura medida). No se escriben números que no hayan salido de una corrida.
+> **Estado:** completo con corridas reales del 11 y 12/11/2026 (k6 `RESULT`, eventos de Kubernetes y capturas de Grafana; respaldo en `backup/gke-20261112-2021`, fuera del repo). No se escriben números que no hayan salido de una corrida.
 
 ## 1. Arquitectura efectivamente usada
 
@@ -226,24 +226,82 @@ Causa: `/livez` y `/healthz` eran funciones síncronas y hacían cola en el mism
 - **Corrección** (commit `4ea251c`): request de CPU de la API = **700m**, cercano al consumo real (entran 2 réplicas por nodo e2-standard-2 y los pods que no entran obligan a GKE a sumar nodos); k6 reserva 500m.
 - Pendiente: repetir 3 y 5 réplicas con 700m (§3.2.4) y el HPA (§3.3).
 
-#### 3.2.4 3 y 5 réplicas con requests de 700m
+#### 3.2.4 3 y 5 réplicas con requests de 700m (12/11/2026, imagen `2565ebb`, chart de `f047c59`)
 
-| Réplicas | VUs | RPS | p50 (ms) | p95 (ms) | p99 (ms) | Errores | Nodos |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 3 | 1 … 100 | | | | | | |
-| 5 | 1 … 100 | | | | | | |
+| Réplicas | VUs | RPS | p50 (ms) | p95 (ms) | p99 (ms) | Máx. (ms) | Errores | Nodos |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 3 | 1 | 78,6 | 11,5 | 17,4 | 25,7 | 141 | 0 % | 2 (2 + 1 réplicas) |
+| 3 | 10 | **179,6** | 42,3 | **105,9** | 156,5 | 622 | 0 % | 2 |
+| 3 | 50 | 165,9 | 278,1 | 457,9 | 572,6 | 943 | 0 % | 2 |
+| 3 | 100 | 157,1 | 592,7 | 921,3 | 1.119,0 | 1.637 | 0 % | 2 |
+| 5 | 1 | 57,8 | 14,0 | 32,6 | 50,3 | 341 | 0 % | 3 (2 + 2 + 1) |
+| 5 | 10 | 231,3 | 17,7 | 135,1 | 209,4 | 790 | 0 % | 3 |
+| 5 | 50 | **248,5** | 179,2 | **330,9** | 472,2 | 1.103 | 0 % | 3 |
+| 5 | 100 | 226,4 | 355,3 | 875,4 | 1.177,9 | 2.008 | 0 % | 3 |
 
-### 3.3 Autoescalado (HPA 2–10)
+Comparación con 1 réplica (§3.2.2), mismo número de usuarios:
 
-| VUs | RPS | p95 (ms) | Errores | Réplicas máx. | Tiempo hasta escalar | Nodos máx. |
-|---:|---:|---:|---:|---:|---|---:|
+| VUs | 1 réplica | 3 réplicas (700m) | 5 réplicas (700m) |
+|---:|---|---|---|
+| 10 | 62,1 req/s · p95 263 ms | 179,6 · 106 ms (×2,9) | 231,3 · 135 ms (×3,7) |
+| 50 | 58,0 · 1.200 ms | 165,9 · 458 ms (×2,9) | 248,5 · 331 ms (×4,3) |
+| 100 | 54,1 · 2.544 ms | 157,1 · 921 ms (×2,9) | 226,4 · 875 ms (×4,2) |
 
-Captura del panel "Réplicas de la API (HPA)" junto a "Latencia de /predict" durante la rampa.
+- Con CPU real disponible, **3 réplicas rinden ≈ 3 veces** lo que una (cada pod ≈ 0,86–0,98 núcleos, captura 7.5b). Frente a §3.2.3 (las mismas 3 réplicas en un solo nodo) el throughput pasó de ≈ 50 a ≈ 180 req/s y el p95 con 100 VUs de 2,8 s a 0,9 s.
+- **5 réplicas escalan, pero menos que proporcional** (×4,1–4,3 en lugar de ×5): dos nodos alojaban 2 réplicas cada uno y k6 compartía nodo con la API. Cada pod igual usaba ≈ 0,85–0,93 núcleos; el límite probable es la CPU de los nodos compartidos o el propio k6 (limitado a 1 núcleo). Queda como hipótesis: no se midió por separado.
+- **Con 1 VU más réplicas no ayudan:** las peticiones son en serie y van a una réplica por vez. El 78,6 req/s con 3 réplicas frente a 60 req/s en la corrida de 1 réplica refleja que k6 ya no competía por CPU con la API (reserva de 500m).
+- Con 100 VUs el p95 deja de mejorar entre 3 y 5 réplicas (921 → 875 ms): por encima de ≈ 250 req/s el sistema ya está en su techo con esta cantidad de nodos.
+- `k6-r3b-vus100` y `k6-r5-vus100` terminaron como `Failed`: k6 sale con código de error cuando se cruzan los umbrales del script (p95 > 500 ms), no por errores HTTP (0 %).
 
-### 3.4 Análisis (a redactar con los datos)
+### 3.3 Autoescalado (HPA 2–10, objetivo 60 % de CPU, requests de 700m)
 
-- **Saturación de una réplica:** a partir de cuántas peticiones por segundo la latencia crece por espera en cola (el docente midió unas 200 rps por proceso en su prueba local).
-- **Escalado lineal:** RPS con 3 y 5 réplicas contra 1 réplica. Si no escala, buscar el cuello de botella (CPU de los nodos, k6, red).
-- **Justificación del HPA:** umbral del 60 % y request de 250m frente al consumo medido. Ajustar si el HPA reacciona tarde o de más.
-- **Alerta:** si `PredictLatenciaP95Alta` (p95 > 300 ms durante 3 min) se disparó, en qué condiciones; si no, umbral frente a los p95 observados.
-- **Errores:** origen (timeouts, 503 durante el arranque de pods, etc.).
+Dos corridas con la misma carga (150 VUs, 4 min) partiendo de 2 réplicas. La diferencia es cómo k6 reutiliza las conexiones TCP.
+
+| Corrida | Conexiones | Pedidos | RPS medio | Pico (Grafana) | p50 | p95 | Errores | Réplicas pedidas | Réplicas disponibles | Nodos |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `hpa-vus150` | keep-alive (default) | 33.542 | 131,3 | ≈ 133 | 1.093 ms | 1.520 ms | 0 % | 5 | 5 | 2 → 4 |
+| `hpa-noreuse-b` | una por pedido (`-NoReuse`) | 63.370 | **247,7** | **295** | **255 ms** | 1.962 ms | 0 % | **10** (máximo) | 7 | 4 (máximo) |
+
+Secuencia de la segunda corrida (eventos `SuccessfulRescale` de `kubectl describe hpa api`, captura 7.6b, horas reconstruidas desde su antigüedad, ±10 s):
+
+| Hora | Réplicas | Motivo |
+|---|---|---|
+| 20:02:00 | 3 → 5 | CPU sobre el objetivo |
+| 20:02:15 | 5 → 6 | |
+| 20:02:29 | 6 → 8 | |
+| 20:02:43 | 8 → **10** | máximo, ≈ 45 s después del primer escalado |
+| ≈ 20:06 | | termina la carga |
+| 20:07:39 | 10 → 4 | CPU bajo el objetivo, tras la ventana de 120 s |
+| 20:07:54 | 4 → **2** | mínimo |
+
+#### 3.3.1 Hallazgo: con keep-alive, las réplicas nuevas no reciben tráfico
+
+En `hpa-vus150` el HPA subió a 5 réplicas y GKE agregó 2 nodos (captura 7.6a), pero el throughput quedó plano en ≈ 130 req/s: las 2 réplicas originales trabajaron a ≈ 0,95 núcleos y las 3 nuevas casi a 0 (captura 7.7a). k6 abre una conexión TCP por usuario virtual y la reutiliza; un Service de Kubernetes (kube-proxy) reparte **conexiones**, no pedidos, así que las 150 conexiones quedaron fijadas a los 2 pods que existían al empezar. El promedio de CPU que ve el HPA ((2 × 135 % + 3 × ≈ 0 %) / 5 ≈ 54 %) quedó bajo el 60 % y el HPA se detuvo en 5.
+
+Con una conexión por pedido (`-NoReuse`), cada pedido se reparte entre todas las réplicas: el throughput se duplicó, el p50 bajó a la cuarta parte y el HPA fue hasta 10. El p95 más alto (1.962 ms) refleja el primer tramo con 2 réplicas y el costo de abrir una conexión por pedido.
+
+Conclusión: el HPA solo ayuda si el balanceo reparte **pedidos**. Con clientes que mantienen conexiones largas hace falta un balanceador de capa 7 (Ingress HTTP, gateway o service mesh) o limitar la vida de las conexiones del lado del servidor.
+
+#### 3.3.2 Hallazgo: el tope del node pool limita al HPA (pods `Pending`)
+
+Con el HPA en 10, 3 a 4 réplicas quedaron en `Pending` (capturas 7.9b1–3 y 7.8). Los eventos de cada pod son los mismos:
+
+- `FailedScheduling`: *0/4 nodes are available: 4 Insufficient cpu.*
+- `NotTriggerScaleUp` (cluster-autoscaler): *Pod didn't trigger scale-up: 1 max node group size reached.*
+
+La causa es **falta de CPU reservable en los nodos** con el autoescalador de nodos ya en su máximo (4 nodos e2-standard-2): cada nodo tiene ≈ 1,9 núcleos asignables, de los que el sistema y la observabilidad usan una parte; entran ≈ 6–7 réplicas de 700m. Para 10 réplicas harían falta ≈ 6 nodos (o nodos más grandes). El mismo efecto dejó al pod de k6 en `Pending` 2,5 min (captura 7.8) hasta que el HPA bajó réplicas y liberó CPU.
+
+#### 3.3.3 Tiempos de reacción
+
+- **HPA al subir:** de 3 a 10 réplicas en ≈ 45 s, en saltos cada ≈ 15 s (política por defecto: hasta 4 pods o 100 % cada 15 s, visible en `describe hpa`).
+- **Disponibilidad real:** en `hpa-vus150` las réplicas pedidas tardaron ≈ 2,5 min en estar disponibles porque GKE tuvo que crear 2 nodos (≈ 70 s), descargar la imagen y cargar los modelos. El escalado de pods es rápido; el de nodos domina.
+- **HPA al bajar:** espera la ventana de 120 s configurada y vuelve al mínimo en dos pasos (10 → 4 → 2 en 15 s).
+- **Autoescalador de nodos al bajar:** retira los nodos sobrantes ≈ 10 min después; al hacerlo reubica pods y corta los `port-forward` (pasó con el túnel de Grafana).
+
+### 3.4 Análisis
+
+- **Saturación de una réplica:** ≈ 60 req/s por réplica (un proceso uvicorn, ≈ 15 ms de CPU por predicción, dominados por pandas y el preprocesamiento). A partir de ahí la latencia crece solo por espera en cola (ley de Little). El docente midió ≈ 200 rps por proceso con un modelo más liviano; aquí cada pedido arma un DataFrame y aplica el pipeline completo.
+- **Escalado:** casi lineal hasta 3 réplicas (×2,9) y sublineal con 5 (×4,2), siempre que cada réplica tenga CPU propia. Con requests de 250m el scheduler apiló 3 réplicas en un nodo y rindieron menos que una (§3.2.3).
+- **Justificación del HPA:** el request debe reflejar el consumo real (≈ 0,9 núcleos bajo carga → 700m) para que el scheduler reparta y el autoescalador de nodos actúe. Con 700m, el objetivo del 60 % (≈ 420m) dispara el escalado antes de que una réplica sature. El tope real lo pone el node pool (4 nodos).
+- **Alerta `PredictLatenciaP95Alta`:** no se disparó en ninguna prueba. Usa la latencia medida **dentro** del servidor (p95 ≈ 120–320 ms), que no incluye la espera en cola antes de que la réplica tome el pedido; la latencia que percibe el cliente (k6) llegó a 1,5–2,5 s. Para producción la alerta debería basarse en la latencia medida en el balanceador/Ingress o en una sonda sintética.
+- **Errores:** 0 % en todas las corridas con la configuración final. El único episodio con errores (52,7 %) fue la sonda de liveness reiniciando una réplica saturada (§3.2.1), corregido.
