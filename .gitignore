@@ -23,3 +23,6 @@ backend.hcl
 *.json.key
 *-key.json
 .env
+
+# Respaldos locales del cluster (scripts/backup-gke.ps1)
+backup/
