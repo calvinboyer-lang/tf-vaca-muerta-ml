@@ -1,20 +1,20 @@
 # Resultados de las pruebas y análisis
 
-> **Estado:** la sección 2 (entrenamiento) está completa con corridas reales del 11/11/2026. Las secciones 1 y 3 se completan con las mediciones en GKE (líneas `RESULT` de k6 y capturas de Grafana). No se escriben números que no hayan salido de una corrida.
+> **Estado:** la sección 2 (entrenamiento) y §3.0–3.2.3 están completas con corridas reales del 11/11/2026. Faltan §3.2.4 (3 y 5 réplicas con requests de 700m), §3.3 (HPA) y §1 (arquitectura medida). No se escriben números que no hayan salido de una corrida.
 
 ## 1. Arquitectura efectivamente usada
 
 | Elemento | Valor |
 |---|---|
-| Proyecto / región / zona | `<proyecto>` / us-central1 / us-central1-a |
-| Cluster | `tfvm-dev-gke`, zonal, canal REGULAR, versión `<kubectl version>` |
-| Node pool | e2-standard-2 (2 vCPU, 8 GB), disco 40 GB pd-standard, autoescalado 1–4 (nodos al inicio: `<n>`) |
+| Proyecto / región / zona | `unlu-ia-boyer-lab-511417` / us-central1 / us-central1-a |
+| Cluster | `tfvm-dev-gke`, zonal, canal REGULAR, versión `v1.36.4-gke.2377000` (creado por Terraform desde GitHub Actions en 11 min) |
+| Node pool | e2-standard-2 (2 vCPU, 8 GB), disco 40 GB pd-standard, autoescalado 1–4 (nodos al inicio: 1; API, PostgreSQL y toda la observabilidad entraron en ese nodo) |
 | Servicios desplegados | api (Deployment + HPA), postgres (StatefulSet + PVC 2 Gi), training (3 CronJobs), kube-prometheus-stack, Loki, Alloy |
-| Recursos por pod de la API | requests 250m / 384Mi, limits 1 CPU / 768Mi, 1 proceso uvicorn |
+| Recursos por pod de la API | requests 250m → **700m** (ver §3.2.3) / 384Mi, limits 1 CPU / 768Mi, 1 proceso uvicorn |
 | HPA | 2–10 réplicas, CPU 60 % de la request, estabilización 0 s al subir y 120 s al bajar |
-| Modelo | `DecisionTreeRegressor` (scikit-learn 1.5.2) en un pipeline con one-hot; artefacto joblib de `<KB>` |
-| Dónde se entrenó | `<local (PC) / Job en GKE>` |
-| Dataset | `<dataset_id>`, sha256 `<…>`, `<filas>` filas / `<pozos>` pozos, meses `<desde>`–`<hasta>` |
+| Modelo | `DecisionTreeRegressor` (scikit-learn 1.5.2) en un pipeline con one-hot; artefactos joblib de 5 a 18 KB |
+| Dónde se entrenó | Job en GKE (CronJob `training-<modelo>` con `tune: true`); las mismas métricas se obtuvieron en la PC y en k3d |
+| Dataset | `vm_shale_202601_202606`, sha256 `04a1ebb3…b3b2d5`, 12.321 filas / 2.212 pozos, meses 2026-01–2026-06 |
 
 ## 2. Ciclo de entrenamiento
 
@@ -185,12 +185,51 @@ foreach ($v in 1,10,50,100,150) { .\tasks.ps1 loadtest -Vus $v -Duration 3m -Lab
 
 ### 3.2 Réplicas fijas
 
-| Réplicas | VUs | RPS | p50 (ms) | p95 (ms) | p99 (ms) | Errores | CPU por pod (Grafana) |
-|---:|---:|---:|---:|---:|---:|---:|---|
-| 1 | 1 | | | | | | |
-| 1 | 10 | | | | | | |
-| 1 | 50 | | | | | | |
-| 1 | 100 | | | | | | |
+Corridas del 11/11/2026 en GKE (1 nodo e2-standard-2 al inicio; k6 2.3.0 como Job en el mismo cluster; 2 min de meseta por corrida; `POST /predict` con el modelo por defecto). Valores de las líneas `RESULT` (`results/k6-gke_…-<label>.log`).
+
+#### 3.2.1 Hallazgo: sondas de salud que tumban la réplica saturada (imagen `14d68a6`)
+
+| Corrida | VUs | RPS | p50 | p95 | p99 | Máx. | Errores |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| r1-vus1 | 1 | 62,2 | 13,5 ms | ≈ 28 ms | 40,7 ms | 205 ms | 0 % |
+| r1-vus10 | 10 | 58,5 | 144 ms | 297 ms | 492 ms | 1.937 ms | 0 % |
+| r1-vus50 | 50 | 94,7* | — | 1.073 ms | 1.512 ms | 3.072 ms | **52,7 %** |
+
+\* Incluye respuestas fallidas inmediatas (conexión rechazada), por eso el RPS "sube".
+
+Secuencia (eventos de Kubernetes): con 50 VUs sobre una réplica saturada, `/livez` superó el timeout de 1 s de la sonda (*context deadline exceeded*), Kubernetes **reinició el pod** (*failed liveness probe, will be restarted*) y durante el reinicio no hubo ninguna réplica disponible (*connection refused*, *i/o timeout*). El panel "Réplicas de la API" muestra el bache a 0 disponibles.
+
+Causa: `/livez` y `/healthz` eran funciones síncronas y hacían cola en el mismo pool de threads que `/predict`; con la CPU saturada, la sonda esperaba detrás de las predicciones. Corrección (commit `2565ebb`): sondas y `/metrics` como `async def` (se atienden en el event loop), readiness con timeout de 3 s y liveness tolerante (timeout 5 s × 6 intentos ≈ 1 min). **Lección:** una sonda de liveness agresiva convierte una saturación (latencia alta) en una caída (errores), justo cuando más se necesita la réplica.
+
+#### 3.2.2 1 réplica, sondas corregidas (imagen `2565ebb`)
+
+| Réplicas | VUs | RPS | p50 (ms) | p95 (ms) | p99 (ms) | Máx. (ms) | Errores | CPU del pod (Grafana) |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 1 | 1 | 60,5 | 14,0 | 29,1 | 42,0 | 161 | 0 % | ≈ 0,9 núcleos |
+| 1 | 10 | 62,1 | 142,9 | 262,5 | 374,6 | 642 | 0 % | ≈ 0,9 |
+| 1 | 50 | 58,0 | 796,4 | 1.200,2 | 1.783,4 | 2.338 | 0 % | ≈ 0,9 |
+| 1 | 100 | 54,1 | 1.704,2 | 2.544,2 | 3.218,9 | 3.937 | 0 % | ≈ 0,9 |
+
+- **Techo de una réplica ≈ 60 req/s.** Con un solo VU (peticiones en serie) ya se alcanza: cada predicción cuesta ≈ 15 ms de CPU, dominados por armar el DataFrame de pandas y el preprocesamiento, no por el árbol.
+- Por encima del techo, más VUs solo agregan **espera en cola**: la latencia crece en proporción (ley de Little: 100 VUs ÷ 54 req/s ≈ 1,85 s, contra un p50 medido de 1,70 s).
+- Con las sondas corregidas, **0 % de errores aun con 100 VUs**: la réplica atiende lento pero no se cae.
+
+#### 3.2.3 3 réplicas en un solo nodo (requests de 250m)
+
+| Réplicas | VUs | RPS | p50 (ms) | p95 (ms) | p99 (ms) | Máx. (ms) | Errores | CPU por pod (Grafana) |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 3 | 10 | 48,5 | 156,6 | 469,3 | 752,3 | 1.223 | 0 % | ≈ 0,43 |
+| 3 | 50 | 45,1 | 933,9 | 2.083,6 | 2.803,8 | 3.803 | 0 % | ≈ 0,43 |
+| 3 | 100 | 53,9 | 1.720,2 | 2.770,1 | 3.576,7 | 4.331 | 0 % | ≈ 0,43 |
+
+- **Tres réplicas rindieron menos que una.** La API pedía 250m de CPU pero usa ≈ 0,9 núcleos bajo carga: el scheduler ubicó las 3 réplicas en el único nodo (2 vCPU, compartido con la observabilidad y con k6) y, como "entraban", el autoescalador de nodos no agregó ninguno. Cada pod quedó con ≈ 0,43 núcleos (≈ 1,3 en total).
+- **Corrección** (commit `4ea251c`): request de CPU de la API = **700m**, cercano al consumo real (entran 2 réplicas por nodo e2-standard-2 y los pods que no entran obligan a GKE a sumar nodos); k6 reserva 500m.
+- Pendiente: repetir 3 y 5 réplicas con 700m (§3.2.4) y el HPA (§3.3).
+
+#### 3.2.4 3 y 5 réplicas con requests de 700m
+
+| Réplicas | VUs | RPS | p50 (ms) | p95 (ms) | p99 (ms) | Errores | Nodos |
+|---:|---:|---:|---:|---:|---:|---:|---:|
 | 3 | 1 … 100 | | | | | | |
 | 5 | 1 … 100 | | | | | | |
 
