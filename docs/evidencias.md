@@ -84,7 +84,7 @@ Estado: ✅ capturada · 🔁 conviene repetirla (comando tapado o incompleta) �
 | 7.5 | — | 3 y 5 réplicas con requests de 700m: `get pods -o wide` (nodos) + resultados | ⏳ |
 | 7.6 | — | `kubectl get hpa api -w` con las réplicas subiendo de 2 a más | ⏳ |
 | 7.7 | — | Dashboard durante la carga con HPA (réplicas subiendo y bajando) | ⏳ |
-| 7.8 | — | Si hay pods `Pending`: `kubectl get pods` + `kubectl describe pod` (eventos) | ⏳ si ocurre |
+| 7.8 | `capturas/7.8_describe_pod_pending_k6_insufficient_cpu.png` | Pod de k6 en `Pending` 2,5 min: `FailedScheduling` *0/4 nodes are available: 4 Insufficient cpu* y `NotTriggerScaleUp` *max node group size reached* (4 nodos, el máximo); se programó cuando el HPA bajó réplicas y liberó CPU | ✅ |
 
 ## 8. Estado final (equivalente al 6.1)
 
