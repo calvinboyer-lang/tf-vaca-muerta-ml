@@ -35,7 +35,7 @@ Estado: ✅ capturada · 🔁 conviene repetirla (comando tapado o incompleta) �
 | # | Archivo | Qué muestra | Estado |
 |---|---|---|---|
 | 3.1 | `capturas/3.1_ci_15_success.png` | `ci` #15 (commit `14d68a6`) en Success: test, infra, build, publish (api) y publish (training) | ✅ |
-| 3.2 | — | Log de **publish (api)** con el título del job y la línea `pushed` con el SHA completo | ⏳ |
+| 3.2 | `capturas/3.2_ci_publish_api_2565ebb.png` | Log de **publish (api)**: `pushed …/tf-vaca-muerta/api:2565ebb9bb449f8c1eb7aa72907d8ff1660a1ff2` con su digest sha256 (la imagen desplegada en GKE) | ✅ |
 
 ## 4. GCP y Terraform (equivalente al 2.1)
 
