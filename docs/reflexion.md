@@ -1,12 +1,14 @@
 # Reflexión crítica
 
-> **Borrador.** Estructura y argumentos que no dependen de las mediciones; las cifras se completan con `docs/resultados.md`.
+> Las cifras salen de `docs/resultados.md` (corridas del 11 y 12/11/2026).
 
 ## 1. Alcances
 
 - Plataforma completa y reproducible: datos versionados → entrenamiento con validación y promoción controlada → API con trazabilidad de versión → despliegue por IaC y CI/CD con OIDC → métricas, logs y alertas → pruebas de carga y escalado.
 - Tres modelos con usos explícitos: descriptivo (v1, v2) y de pronóstico (v2_notef).
 - Cada predicción indica qué versión respondió, con qué datos de entrada y de dónde salieron.
+- Reproducibilidad comprobada: el mismo snapshot dio las mismas métricas en la PC del autor, en k3d y en un Job en GKE (v2_notef: MAE 560,8 m³, R² 0,635).
+- Servicio medido en GKE: ≈ 60 req/s por réplica, hasta ≈ 250–295 req/s con 5–7 réplicas, 0 % de errores con la configuración final.
 
 ## 2. Limitaciones del modelo
 
@@ -16,6 +18,16 @@
 - **Variables faltantes:** etapas de fractura, arena y agua bombeadas (Adjunto IV, otro dataset), presiones, choke. El largo horizontal (capa 10) se evaluó y no mejora el modelo: cubre el 52 % de los pozos y su información ya está en la profundidad y la edad.
 - **TEF:** v1 y v2 lo necesitan y solo se conoce al cerrar el mes. Si no se informa, la API supone el mes completo, lo que sobrestima en meses con paradas.
 - **Categorías nuevas:** una operadora o área que no estaba en el entrenamiento se codifica como "ninguna categoría" (la respuesta lo marca en `categorias_no_vistas`).
+
+## 2b. Limitaciones de la plataforma (halladas en las pruebas)
+
+- **Una réplica es un solo proceso** y cada predicción cuesta ≈ 15 ms de CPU, sobre todo en armar el DataFrame de pandas y en el preprocesamiento. El techo por réplica es ≈ 60 req/s; por encima, solo crece la espera en cola.
+- **Las sondas de salud** síncronas y con timeout de 1 s reiniciaron una réplica saturada y la saturación se volvió caída (52,7 % de errores). Se corrigió (sondas `async`, timeouts tolerantes), pero muestra lo frágil que es la configuración por defecto bajo carga.
+- **El request de CPU** tiene que reflejar el consumo real. Con 250m (contra ≈ 900m reales) el scheduler apiló 3 réplicas en un nodo y rindieron menos que una. Con 700m escalan.
+- **El balanceo de un Service reparte conexiones, no pedidos.** Con clientes que mantienen conexiones abiertas (keep-alive), las réplicas que agrega el HPA casi no reciben tráfico y el HPA se frena.
+- **El tope del node pool** (4 nodos e2-standard-2) limita al HPA: con 10 réplicas pedidas, 3–4 quedaron `Pending` por falta de CPU. Los nodos nuevos tardan ≈ 70 s más la descarga de la imagen y la carga de los modelos: el escalado de pods es rápido, el de nodos domina.
+- **La alerta de latencia** mide dentro del servidor (p95 ≤ 320 ms) y no ve la espera en cola que percibe el cliente (p95 de hasta 2,5 s): no se disparó en ninguna prueba.
+- **Prometheus no tiene almacenamiento persistente:** al bajar los nodos se perdieron las métricas del primer día (quedaron capturas, los resultados de k6 y un respaldo exportado del segundo día).
 
 ## 3. Implicancias éticas
 
@@ -30,10 +42,14 @@
 |---|---|
 | Datos | Ingesta automática mensual, validación de esquema y de rangos (p. ej. Great Expectations), monitoreo de *drift* de entradas y salidas |
 | Modelo | Serie histórica multi-año, validación temporal estricta, intervalos de predicción (no solo un valor), modelos que sigan la declinación |
-| Seguridad | Autenticación de la API (API key u OAuth), TLS e Ingress con WAF, `ADMIN_TOKEN` desde Secret Manager, red privada para GKE, formato de modelo sin ejecución de código (ONNX o `skops`) |
-| Operación | Cluster regional o al menos multi-zona, PostgreSQL gestionado con backups (Cloud SQL), Alertmanager con notificaciones, SLOs y *runbooks* |
+| Inferencia | Preprocesamiento sin pandas por pedido (o un formato compilado del modelo), varios workers por réplica, pedidos por lote para estimar muchos pozos a la vez |
+| Tráfico | Ingress o gateway HTTP (capa 7) que reparta pedidos y no conexiones, con TLS; límite de vida de las conexiones; *rate limiting* |
+| Escalado | Requests calibrados con mediciones (como los 700m), node pool más grande o aprovisionamiento automático de nodos, nodos precalentados o réplicas mínimas según la demanda esperada |
+| Seguridad | Autenticación de la API (API key u OAuth), `ADMIN_TOKEN` desde Secret Manager, red privada para GKE, formato de modelo sin ejecución de código (ONNX o `skops`) |
+| Observabilidad | Alertas sobre la latencia que percibe el cliente (balanceador o sonda sintética), almacenamiento persistente para Prometheus, Alertmanager con notificaciones, SLOs y *runbooks* |
+| Operación | Cluster regional o al menos multi-zona, PostgreSQL gestionado con backups (Cloud SQL), retención y archivado de la tabla de predicciones (380.947 filas en dos días de pruebas) |
 | Entrega | Entornos dev/prod separados con aprobación manual, despliegues canary o blue-green de versiones del modelo, rollback automático si empeoran las métricas en línea |
-| Costos | Apagado automático fuera de horario, nodos Spot para entrenamiento, presupuestos y alertas de facturación |
+| Costos | Apagado automático fuera de horario, nodos Spot para entrenamiento, política de limpieza del Artifact Registry (llegó a 7,95 GB por publicar en cada push), presupuestos y alertas de facturación |
 
 ## 5. Continuidad (Curso 4, IA generativa)
 
