@@ -26,3 +26,6 @@ backend.hcl
 
 # Respaldos locales del cluster (scripts/backup-gke.ps1)
 backup/
+
+# Intermedios del informe (informe/build_informe.py)
+informe/build/

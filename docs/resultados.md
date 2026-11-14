@@ -172,15 +172,20 @@ El pozo 166692 (YPF, La Angostura Sur I, surgencia natural, profundidad 6.641 m,
 - Réplicas fijas: `.\tasks.ps1 replicas -Replicas N` (quita el HPA). Autoescalado: reinstalar el chart (HPA 2–10).
 - Por corrida se guarda `results\k6-<contexto>-<label>.log` y una captura del dashboard.
 
-Comandos de la matriz:
+- k6 reserva 500m de CPU y tiene límite de 1 núcleo; por defecto reutiliza conexiones (keep-alive). Con `-NoReuse` abre una conexión por pedido (§3.3.1).
+- k6 marca la corrida como fallida si se cruzan sus umbrales (p95 > 500 ms o errores > 1 %); el resultado se guarda igual.
+
+Comandos efectivamente usados:
 
 ```powershell
+# Réplicas fijas (1 réplica el 11/11; 3 y 5 réplicas el 12/11 con requests de 700m)
 foreach ($r in 1,3,5) {
   .\tasks.ps1 replicas -Replicas $r
   foreach ($v in 1,10,50,100) { .\tasks.ps1 loadtest -Vus $v -Duration 2m -Label "r$r-vus$v" }
 }
-# HPA 2-10: reinstalar el chart api (deploy.yml con charts=api) y luego
-foreach ($v in 1,10,50,100,150) { .\tasks.ps1 loadtest -Vus $v -Duration 3m -Label "hpa-vus$v" }
+# HPA 2-10: reinstalar el chart api (deploy.yml con charts=api), esperar 2 réplicas y luego
+.\tasks.ps1 loadtest -Vus 150 -Duration 4m -Label hpa-vus150              # keep-alive
+.\tasks.ps1 loadtest -Vus 150 -Duration 4m -Label hpa-noreuse-b -NoReuse  # una conexión por pedido
 ```
 
 ### 3.2 Réplicas fijas
@@ -257,10 +262,17 @@ Comparación con 1 réplica (§3.2.2), mismo número de usuarios:
 
 Dos corridas con la misma carga (150 VUs, 4 min) partiendo de 2 réplicas. La diferencia es cómo k6 reutiliza las conexiones TCP.
 
-| Corrida | Conexiones | Pedidos | RPS medio | Pico (Grafana) | p50 | p95 | Errores | Réplicas pedidas | Réplicas disponibles | Nodos |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `hpa-vus150` | keep-alive (default) | 33.542 | 131,3 | ≈ 133 | 1.093 ms | 1.520 ms | 0 % | 5 | 5 | 2 → 4 |
-| `hpa-noreuse-b` | una por pedido (`-NoReuse`) | 63.370 | **247,7** | **295** | **255 ms** | 1.962 ms | 0 % | **10** (máximo) | 7 | 4 (máximo) |
+| | `hpa-vus150` | `hpa-noreuse-b` |
+|---|---|---|
+| Conexiones de k6 | keep-alive (por defecto) | una por pedido (`-NoReuse`) |
+| Pedidos | 33.542 | 63.370 |
+| RPS medio (k6) | 131,3 | **247,7** |
+| Pico (Grafana) | ≈ 133 req/s | **295 req/s** |
+| p50 / p95 (k6) | 1.093 / 1.520 ms | **255** / 1.962 ms |
+| Errores | 0 % | 0 % |
+| Réplicas pedidas por el HPA | 5 | **10** (máximo) |
+| Réplicas disponibles | 5 | 7 (3–4 en `Pending`) |
+| Nodos | 2 → 4 | 4 (máximo) |
 
 Secuencia de la segunda corrida (eventos `SuccessfulRescale` de `kubectl describe hpa api`, captura 7.6b, horas reconstruidas desde su antigüedad, ±10 s):
 
