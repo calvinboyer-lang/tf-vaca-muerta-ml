@@ -46,7 +46,7 @@ Estado: ✅ capturada · 🔁 conviene repetirla (comando tapado o incompleta) �
 | 4.1c | `capturas/4.1c_gcp_roles_ci_deployer.png` | Roles de `ci-deployer` y binding de Workload Identity del repo | ✅ |
 | 4.1d | `capturas/4.1d_github_variables.png` | Las 5 variables de GitHub Actions | ✅ |
 | 4.2 | `capturas/4.2_deploy_terraform_success.png` | `deploy` #1: terraform 11 min 9 s y helm en Success | ✅ |
-| 4.2b | — | Log de **terraform apply** con `Apply complete! Resources: N added…` | ⏳ (se saca del run #1 en GitHub) |
+| 4.2b | `capturas/4.2b_terraform_apply_complete.png` | `terraform apply` del deploy #1: `Apply complete! Resources: 15 added, 0 changed, 0 destroyed.`; bindings de Workload Identity creados después del cluster; node pool en 1 min 33 s; outputs (cuentas, registro, bucket) | ✅ |
 | 4.3 | `capturas/4.3_upload_dataset_bucket.png` | Snapshot y manifest subidos al bucket | ✅ |
 
 ## 5. GKE: entrenamiento, pods y `/predict` (equivalente al 3.1)
