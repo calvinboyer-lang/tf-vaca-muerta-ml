@@ -93,7 +93,7 @@ Respuesta real (GKE, 12/11/2026). El pozo 166692 es del holdout: el modelo no lo
 
 ```bash
 curl -s -X POST http://localhost:8081/predict -H "Content-Type: application/json" \
-  -d '{"idpozo": 165715, "model": "v2", "anio": 2026, "mes": 6, "tef": 28}'
+  -d '{"idpozo": 166692, "model": "v2", "anio": 2026, "mes": 6, "tef": 28}'
 ```
 
 **3. Pozo hipotético (todas las variables explícitas), como en la Figura 1 de la devolución:**
