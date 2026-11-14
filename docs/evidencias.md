@@ -25,7 +25,7 @@ Estado: ✅ capturada · 🔁 conviene repetirla (comando tapado o incompleta) �
 | 2.1 | `capturas/2.1_herramientas_k8s.png` | Docker 29.9.3, k3d 5.9.0, Helm 4.3.1, kubectl 1.36.1 | ✅ |
 | 2.2 | `capturas/2.2_k3d_nodos_ready.png` | Cluster `tfvm`: server y agent `Ready` | ✅ |
 | 2.3a | `capturas/2.3a_k3d_deploy_svc_hpa_cronjob_pvc.png` | Services, HPA, 3 CronJobs suspendidos, PVC `Bound` | ✅ |
-| 2.3b | `capturas/2.3b_k3d_pods_running.png` | `api` y `postgres-0` en `Running` | 🔁 sin el comando visible |
+| 2.3b | `capturas/2.3b_k3d_pods_running.png` | `api` y `postgres-0` en `Running` | ✅ el comando está en 2.3a (misma ejecución de `k3d-deploy`) |
 | 2.4 | `capturas/2.4_k3d_entrenamiento_no_promovido.png` | Job en k3d: mismas métricas, no promovido, run en PostgreSQL | ✅ |
 | 2.5a | `capturas/2.5a_k3d_k6_vus10.png` | k6 en el cluster: 100,7 req/s, p95 168 ms, 0 % errores | ✅ |
 | 2.5b | `capturas/2.5b_k3d_hpa_1a4_y_stats_postgres.png` | HPA 1 → 4 réplicas y `/stats` con 7.568 predicciones en PostgreSQL | ✅ |
@@ -58,7 +58,7 @@ Estado: ✅ capturada · 🔁 conviene repetirla (comando tapado o incompleta) �
 | 5.2b | `capturas/5.2b_gke_train_v2_v2notef.png` | v2 y v2_notef entrenadas y promovidas en GKE | ✅ |
 | 5.3 | `capturas/5.3_deploy_api_observability.png` | `deploy` #3: helm y observability en Success | ✅ |
 | 5.3b | `capturas/5.3b_deploy5_api_700m.png` | `deploy` #5: API con requests de 700m (imagen `2565ebb`) | ✅ |
-| 5.4 | `capturas/5.4_gke_pods_hpa_observability.png` | Pods de la API, PostgreSQL, HPA 2/10 y stack de observabilidad | 🔁 el comando queda cortado arriba |
+| 5.4 | `capturas/5.4_gke_pods_hpa_observability.png` | Pods de la API, PostgreSQL, HPA 2/10 y stack de observabilidad | ✅ complementada por 5.5 (comando visible) |
 | 5.5 | `capturas/5.5_gke_pods_y_predict.png` | Comando visible, encabezado de la tabla, 2 réplicas de la API y `postgres-0` en `Running` con su nodo; `/predict` responde `v2_notef-20261112T001844` (2.247,9 m³) | ✅ |
 
 ## 6. Grafana base, sin carga (equivalente al 4.1)
@@ -80,8 +80,13 @@ Estado: ✅ capturada · 🔁 conviene repetirla (comando tapado o incompleta) �
 | 7.3b | `capturas/7.3b_k6_r1b_sondas_corregidas.png` | 1 réplica, 1–100 VUs con sondas corregidas: 0 % errores | ✅ |
 | 7.4a | `capturas/7.4a_grafana_r3_un_nodo.png` | 3 réplicas en un nodo: ≈ 0,43 núcleos por pod, latencia peor | ✅ |
 | 7.4b | `capturas/7.4b_k6_r3_resultados.png` | Resultados k6 de 3 réplicas (requests 250m) | ✅ |
-| 7.4c | — | `kubectl get pods -o wide` mostrando las 3 réplicas en el mismo nodo | ⏳ (se reemplaza por la prueba con 700m) |
-| 7.5 | — | 3 y 5 réplicas con requests de 700m: `get pods -o wide` (nodos) + resultados | ⏳ |
+| 7.4c | — | `get pods -o wide` con las 3 réplicas en un nodo: no se capturó; queda demostrado por la CPU por pod (7.4a) y por la prueba corregida (7.5a) | — reemplazada |
+| 7.5a | `capturas/7.5a_r3_700m_pods_por_nodo.png` | 3 réplicas con 700m repartidas en 2 nodos (comando visible) | ✅ |
+| 7.5b | `capturas/7.5b_grafana_r3_700m.png` | Dashboard con 3 réplicas: hasta 187 req/s, cada pod ≈ 0,9 núcleos | ✅ |
+| 7.5c | `capturas/7.5c_k6_r3b_resultados.png` | k6, 3 réplicas: 78,6 / 179,6 / 165,9 / 157,1 req/s, 0 % errores | ✅ |
+| 7.5d | `capturas/7.5d_r5_700m_pods_por_nodo.png` | 5 réplicas en 3 nodos (2 + 2 + 1), sin `Pending` | ✅ |
+| 7.5e | `capturas/7.5e_k6_r5_resultados.png` | k6, 5 réplicas: 57,8 / 231,3 / 248,5 / 226,4 req/s, 0 % errores | ✅ |
+| 7.5f | `capturas/7.5f_grafana_r5_700m.png` | Dashboard con 5 réplicas: hasta 250 req/s | ✅ |
 | 7.6a | `capturas/7.6a_hpa_5_replicas_nodos_nuevos.png` | Prueba con keep-alive: HPA en 5 réplicas y 2 nodos nuevos creados por GKE | ✅ |
 | 7.6b | `capturas/7.6b_hpa_eventos_rescale.png` | `kubectl describe hpa api`: eventos `SuccessfulRescale` de todas las pruebas (2 → 5 → 3 → 9 → 3 → 5 → 6 → 8 → 10 → 4 → 2) con su antigüedad y la política de subida (4 pods o 100 % cada 15 s) | ✅ |
 | 7.7a | `capturas/7.7a_grafana_hpa_vus150_keepalive.png` | HPA con keep-alive: 5 réplicas pero el tráfico queda en ~130 req/s; las réplicas nuevas casi sin CPU | ✅ |
@@ -100,5 +105,5 @@ Estado: ✅ capturada · 🔁 conviene repetirla (comando tapado o incompleta) �
 |---|---|---|---|
 | 8.1 | `capturas/8.1_pausa_nodos_cero.png` | Pausa nocturna del 11/11: sin nodos de GKE corriendo | ✅ |
 | 8.1b | `capturas/8.1b_pausa_nodos_cero_12nov.png` | Pausa del 12/11 tras las pruebas: sin nodos de GKE corriendo | ✅ |
-| 8.2 | — | `helm list -A` vacío / réplica mínima | ⏳ |
-| 8.3 | — | Consola de GCP: clusters y costos al cierre | ⏳ |
+| 8.2 | — | Eliminación final: `helm list -A` vacío, PVC borrados, `terraform destroy` | ⏳ al cerrar |
+| 8.3 | — | Consola de GCP al cierre: sin clusters, discos ni imágenes del TF | ⏳ al cerrar |
