@@ -3,7 +3,7 @@
 Base: `http://<host>:8081`. Documentación interactiva (OpenAPI) en `/docs`.
 Los ejemplos se muestran con `Invoke-RestMethod` (PowerShell) y con `curl`.
 
-> Los valores numéricos de los ejemplos son **ilustrativos**. Se reemplazan por respuestas reales en la fase de pruebas.
+> Los ejemplos 1, `/wells/{idpozo}` y `/models` son **respuestas reales** de la API desplegada en GKE el 12/11/2026 (capturas 5.5 y 2.5b; ver `docs/resultados.md` §3.0.1). Los ejemplos 2 a 4 muestran el formato del pedido y del error.
 
 ## Resumen
 
@@ -65,25 +65,29 @@ Los ejemplos se muestran con `Invoke-RestMethod` (PowerShell) y con `curl`.
 
 ```powershell
 Invoke-RestMethod -Method Post -Uri http://localhost:8081/predict -ContentType "application/json" `
-  -Body '{"idpozo": 165715}'
+  -Body '{"idpozo": 166692}'
 ```
+
+Respuesta real (GKE, 12/11/2026). El pozo 166692 es del holdout: el modelo no lo vio al entrenar.
 
 ```json
 {
   "model": "v2_notef",
-  "version": "v2_notef-20261114T153000",
+  "version": "v2_notef-20261112T001844",
   "use": "pronóstico: no usa información posterior al inicio del mes",
-  "idpozo": 165715,
+  "idpozo": 166692,
   "periodo": "2026-07",
-  "prediccion_m3_mes": 812.4,
+  "prediccion_m3_mes": 2247.9,
   "fuera_de_rango": false,
   "categorias_no_vistas": [],
-  "entrada": {"profundidad": 3172.0, "edad_meses": 31, "tipoextraccion": "Bombeo Mecánico",
-              "empresa": "YPF S.A.", "areayacimiento": "LA AMARGA CHICA"},
-  "fuentes": ["pozo 165715 (dataset)", "tef supuesto = días del mes"],
-  "referencia_mae_holdout": 634.7
+  "entrada": {"profundidad": 6641.0, "edad_meses": 21, "tipoextraccion": "Surgencia Natural",
+              "empresa": "YPF S.A.", "areayacimiento": "LA ANGOSTURA SUR I"},
+  "fuentes": ["pozo 166692 (dataset)"],
+  "referencia_mae_holdout": 560.8
 }
 ```
+
+`fuentes` dice de dónde salió cada variable. Con `v1` o `v2` y sin `tef`, agrega `"tef supuesto = días del mes"`.
 
 **2. Modelo descriptivo con TEF real del mes:**
 
@@ -107,29 +111,48 @@ curl -s -X POST http://localhost:8081/predict -H "Content-Type: application/json
 
 ## GET /wells/{idpozo}
 
-Reproduce el "explorador de pozos" de la devolución: producción real mes a mes y la estimación de cada modelo vigente, para analizar la declinación.
+Reproduce el "explorador de pozos" de la devolución: producción real mes a mes y la estimación de cada modelo vigente, para analizar la declinación. Respuesta real (k3d, 11/11/2026; resumida a 2 de los 6 meses):
 
 ```json
 {
-  "pozo": {"idpozo": 165715, "empresa": "YPF S.A.", "areayacimiento": "LA AMARGA CHICA",
-           "primera_produccion": "2023-12", "ultimo_mes": "2026-06", "meses_con_datos": 6},
+  "pozo": {"idpozo": 166692, "empresa": "YPF S.A.", "areayacimiento": "LA ANGOSTURA SUR I",
+           "profundidad": 6641.0, "tipoextraccion": "Surgencia Natural",
+           "primera_produccion": "2024-10", "ultimo_mes": "2026-06",
+           "edad_censurada": false, "meses_con_datos": 6},
   "meses": [
-    {"periodo": "2026-01", "prod_pet_real": 1330.0, "tef": 31.0, "tipoestado": "Extracción Efectiva",
-     "estimado_v1": 2260.1, "estimado_v2": 1588.0, "estimado_v2_notef": 1490.3}
+    {"periodo": "2026-01", "prod_pet_real": 5664.0, "tef": 31.0, "tipoestado": "Extracción Efectiva",
+     "estimado_v1": 3476.3, "estimado_v2": 4151.0, "estimado_v2_notef": 3386.6},
+    {"periodo": "2026-06", "prod_pet_real": 4258.0, "tef": 30.0, "tipoestado": "Extracción Efectiva",
+     "estimado_v1": 3476.3, "estimado_v2": 2967.8, "estimado_v2_notef": 2247.9}
   ],
-  "versiones": {"v1": "v1-...", "v2": "v2-...", "v2_notef": "v2_notef-..."}
+  "versiones": {"v1": "v1-20261111T212728", "v2": "v2-20261111T212736",
+                "v2_notef": "v2_notef-20261111T212741"}
 }
 ```
 
+La tabla completa de los 6 meses y su análisis están en `docs/resultados.md` §3.0.1.
+
 ## GET /models
+
+Respuesta real (GKE, 12/11/2026; se muestra un modelo de los tres):
 
 ```json
 {
   "default_model": "v2_notef",
-  "store": "gs://<proyecto>-tfvm-artifacts/vm",
-  "models": {"v2": {"version": "v2-20261114T152955", "dataset": "vm_shale_202601_202606",
-                    "holdout": {"mae": 541.0, "rmse": 1018.0, "r2": 0.659},
-                    "cv_mae": {"mean": 560.2, "std": 41.7}, "params": {"max_depth": 8, "min_samples_leaf": 20}}},
+  "store": "gs://unlu-ia-boyer-lab-511417-tfvm-artifacts/vm",
+  "models": {
+    "v2_notef": {
+      "model": "v2_notef",
+      "version": "v2_notef-20261112T001844",
+      "use": "pronóstico: no usa información posterior al inicio del mes",
+      "dataset": "vm_shale_202601_202606",
+      "features": ["profundidad", "edad_meses", "tipoextraccion", "empresa", "areayacimiento"],
+      "params": {"max_depth": 8, "min_samples_leaf": 5},
+      "holdout": {"mae": 560.81, "rmse": 1065.45, "r2": 0.6346},
+      "cv_mae": {"mean": 572.56, "std": 28.99},
+      "loaded_utc": "2026-11-12T00:21:36+00:00"
+    }
+  },
   "errors": {},
   "wells_dataset": "vm_shale_202601_202606",
   "wells_count": 3278
